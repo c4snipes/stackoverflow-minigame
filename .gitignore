@@ -12,14 +12,33 @@ obj/
 *.sln.docstates
 .idea/
 
+
 # VS Code
 .vscode/
 
 # macOS
 .DS_Store
+# Thumbnails
+._*
+# Files that might appear on external disks
+.Spotlight-V100
+.Trashes
+# Icon must end with two \r
+.Icon\r\r
+# Files that might appear on network volumes
+.AppleDouble
+.LSOverride
+# Directories potentially created on remote AFP share
+.VolumeIcon.icns
+# Ignore .aitk instructions files used by tooling
+.aitk/instructions/tools.instructions.md
+.aitk/instructions/codacy.instructions.md
+# Ignore .github instructions file used by tooling
+.github/instructions/tools.instructions.md
 
 # Ignore github instructions file used by tooling
 .github/instructions/codacy.instructions.md
+.codebuddy
 
 # FAKE build tool artifacts
 .fake

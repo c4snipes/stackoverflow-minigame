@@ -19,7 +19,7 @@ From the repository root:
    ```bash
    dotnet run
    ```
-
+   
 The project uses a single SDK-style project file `stackoverflow-minigame.csproj` in the repository root, and a solution file `stackoverflow-minigame.sln` is already included.
 
 ## Gameplay
