@@ -92,10 +92,10 @@ namespace stackoverflow_minigame {
         public int VisibleWidth => frameWidth;
 
         public void BeginFrame(World world) {
-            int consoleWidth = ConsoleSafe.GetBufferWidth(world.Width);
-            int consoleHeight = ConsoleSafe.GetBufferHeight(world.Height + HudRows);
+            int consoleWidth = Console.BufferWidth > 0 ? Console.BufferWidth : world.Width;
+            int consoleHeight = Console.BufferHeight > 0 ? Console.BufferHeight : world.Height + HudRows;
 
-            frameWidth = world.Width;
+            frameWidth = Math.Min(world.Width, consoleWidth);
             int availableWorldHeight = Math.Max(0, consoleHeight - HudRows);
             worldRenderHeight = Math.Min(world.Height, availableWorldHeight);
             frameHeight = HudRows + worldRenderHeight;
@@ -121,16 +121,17 @@ namespace stackoverflow_minigame {
                 return;
             }
 
-            int consoleWidth = ConsoleSafe.GetBufferWidth(frameWidth);
-            int consoleHeight = ConsoleSafe.GetBufferHeight(frameHeight);
+            int consoleWidth = Console.BufferWidth > 0 ? Console.BufferWidth : frameWidth;
+            int consoleHeight = Console.BufferHeight > 0 ? Console.BufferHeight : frameHeight;
             int rowsToWrite = Math.Min(frameHeight, consoleHeight);
             int columnsToWrite = Math.Min(frameWidth, consoleWidth);
             int padding = Math.Max(0, consoleWidth - columnsToWrite);
 
             for (int row = 0; row < rowsToWrite; row++) {
-                if (!ConsoleSafe.TrySetCursorPosition(0, row)) {
+                if (row >= Console.BufferHeight) {
                     break;
                 }
+                Console.SetCursorPosition(0, row);
                 Console.Out.Write(frameBuffer, row * frameWidth, columnsToWrite);
                 if (padding > 0) {
                     EnsurePaddingBuffer(padding);

@@ -167,7 +167,7 @@ namespace stackoverflow_minigame {
         }
 
         private void DrawHud() {
-            int consoleWidth = ConsoleSafe.GetBufferWidth(renderer.VisibleWidth);
+            int consoleWidth = Console.BufferWidth > 0 ? Console.BufferWidth : renderer.VisibleWidth;
             int hudWidth = renderer.VisibleWidth > 0 ? Math.Min(renderer.VisibleWidth, consoleWidth) : consoleWidth;
             if (hudWidth <= 0) {
                 return;
@@ -186,17 +186,16 @@ namespace stackoverflow_minigame {
         private static int GetRoundedAltitude(float altitude) => (int)MathF.Round(altitude);
 
         private static void WriteHudLine(int row, string text, int widthHint) {
-            int bufferHeight = ConsoleSafe.GetBufferHeight(-1);
-            if (bufferHeight >= 0 && row >= bufferHeight) return;
+            int bufferHeight = Console.BufferHeight;
+            if (bufferHeight > 0 && row >= bufferHeight) return;
 
-            int consoleWidth = ConsoleSafe.GetBufferWidth(widthHint);
+            int consoleWidth = Console.BufferWidth;
             int targetWidth = consoleWidth > 0 ? consoleWidth : widthHint;
             if (targetWidth <= 0) return;
 
             string output = text.Length > targetWidth ? text[..targetWidth] : text.PadRight(targetWidth);
-            if (ConsoleSafe.TrySetCursorPosition(0, row)) {
-                Console.Out.Write(output);
-            }
+            Console.SetCursorPosition(0, row);
+            Console.Write(output);
         }
 
         /// <summary>
