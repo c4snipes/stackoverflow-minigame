@@ -234,16 +234,26 @@ namespace stackoverflow_minigame {
         }
 
         public void Reset() {
-            Player = new Player(Width / 2, 0);
-            Player.VelocityY = 0f;
+            ResetPlayer();
             platforms.Clear();
             Offset = 0;
             MaxAltitude = 0f;
-            // initial platforms
+            // seed starter platforms: align the first with the player so the opening jump is survivable
             int firstY = 8;
-            platforms.Add(new Platform(rand.Next(Width), firstY));
+            platforms.Add(new Platform(Player.X, firstY));
             int secondY = firstY + 7;
-            platforms.Add(new Platform(rand.Next(Width), secondY));
+            int secondX = rand.Next(Width);
+            if (Width > 1 && secondX == Player.X) {
+                secondX = (secondX + 1) % Width;
+            }
+            platforms.Add(new Platform(secondX, secondY));
+        }
+
+        private void ResetPlayer() {
+            Player ??= new Player(Width / 2, 0f);
+            Player.X = Width / 2;
+            Player.Y = 0f;
+            Player.VelocityY = 0f;
         }
 
         public void Update() {

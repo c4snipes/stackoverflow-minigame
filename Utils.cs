@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
+using System.Security;
 using System.Threading;
 
 namespace stackoverflow_minigame {
@@ -186,6 +188,67 @@ namespace stackoverflow_minigame {
                 highestY += gap;
                 int newX = rand.Next(world.Width);
                 world.Platforms.Add(new Platform(newX, highestY));
+            }
+        }
+    }
+
+    static class ConsoleSafe {
+        public static int GetBufferWidth(int fallback) {
+            try {
+                int width = Console.BufferWidth;
+                return width > 0 ? width : fallback;
+            } catch (IOException) {
+                return fallback;
+            } catch (ArgumentOutOfRangeException) {
+                return fallback;
+            } catch (SecurityException) {
+                return fallback;
+            } catch (PlatformNotSupportedException) {
+                return fallback;
+            }
+        }
+
+        public static int GetBufferHeight(int fallback) {
+            try {
+                int height = Console.BufferHeight;
+                return height > 0 ? height : fallback;
+            } catch (IOException) {
+                return fallback;
+            } catch (ArgumentOutOfRangeException) {
+                return fallback;
+            } catch (SecurityException) {
+                return fallback;
+            } catch (PlatformNotSupportedException) {
+                return fallback;
+            }
+        }
+
+        public static bool TrySetCursorPosition(int left, int top) {
+            if (left < 0 || top < 0) {
+                return false;
+            }
+
+            int width = GetBufferWidth(-1);
+            if (width >= 0 && left >= width) {
+                return false;
+            }
+
+            int height = GetBufferHeight(-1);
+            if (height >= 0 && top >= height) {
+                return false;
+            }
+
+            try {
+                Console.SetCursorPosition(left, top);
+                return true;
+            } catch (IOException) {
+                return false;
+            } catch (ArgumentOutOfRangeException) {
+                return false;
+            } catch (SecurityException) {
+                return false;
+            } catch (PlatformNotSupportedException) {
+                return false;
             }
         }
     }
