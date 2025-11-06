@@ -1,4 +1,25 @@
+# Ignore VS Code AI rules
 
+# Build
+bin/
+obj/
 
-#Ignore vscode AI rules
+# Visual Studio / Rider
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.idea/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Ignore github instructions file used by tooling
 .github/instructions/codacy.instructions.md
+
+# FAKE build tool artifacts
+.fake
