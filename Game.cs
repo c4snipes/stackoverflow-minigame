@@ -17,7 +17,6 @@ namespace stackoverflow_minigame {
         private const int FrameDelay = 50;
         internal const float GravityPerSecond = -8f; // gravity units per second
         internal const float FrameTimeSeconds = FrameDelay / 1000f; // seconds per frame
-        internal const int GravityAcceleration = -1;
         private const int MIN_PROGRESS_BAR_WIDTH = 10;
         private const int MAX_PROGRESS_BAR_WIDTH = 60;
 
@@ -113,10 +112,10 @@ namespace stackoverflow_minigame {
                     playerWon = true;
                 }
 
-                renderer.Clear();
+                renderer.BeginFrame(world);
                 renderer.Draw(world);
-                DrawHud();
                 renderer.Present();
+                DrawHud();
 
                 Thread.Sleep(FrameDelay);
             }
@@ -167,17 +166,35 @@ namespace stackoverflow_minigame {
             if (world.Player.X >= world.Width) world.Player.X = world.Width - 1;
         }
 
+        private void DrawHud() {
+            int consoleWidth = Console.BufferWidth > 0 ? Console.BufferWidth : renderer.VisibleWidth;
+            int hudWidth = renderer.VisibleWidth > 0 ? Math.Min(renderer.VisibleWidth, consoleWidth) : consoleWidth;
+            if (hudWidth <= 0) {
+                return;
+            }
             WriteHudLine(0, $"Score: {score,4} | Height: {GetRoundedAltitude(world.Player.Y),4} | Max: {GetRoundedAltitude(world.MaxAltitude),4}", hudWidth);
-            int hudWidth = world.Width;
-            WriteHudLine(0, $"Score: {score,4} | Height: {(int)MathF.Round(world.Player.Y),4} | Max: {(int)MathF.Round(world.MaxAltitude),4}", hudWidth);
+
             float progress = Math.Clamp(world.MaxAltitude / World.GoalHeight, 0f, 1f);
-            WriteHudLine(1, $"Progress: {BuildProgressBar(progress, 30)} {progress * 100f:0}% of goal {World.GoalHeight:0}", hudWidth);
+            string percentText = $"{progress * 100f:0}%";
+            string goalText = $"{World.GoalHeight:0}";
+            int reservedWidth = $"Progress:  {percentText} of goal {goalText}".Length;
+            int barAvailable = Math.Max(0, hudWidth - reservedWidth);
+            WriteHudLine(1, $"Progress: {BuildProgressBar(progress, barAvailable)} {percentText} of goal {goalText}", hudWidth);
             WriteHudLine(2, "Controls: A/D or <-/-> move | Q quits", hudWidth);
         }
 
-        private static void WriteHudLine(int row, string text, int width) {
+        private static int GetRoundedAltitude(float altitude) => (int)MathF.Round(altitude);
+
+        private static void WriteHudLine(int row, string text, int widthHint) {
+            int bufferHeight = Console.BufferHeight;
+            if (bufferHeight > 0 && row >= bufferHeight) return;
+
+            int consoleWidth = Console.BufferWidth;
+            int targetWidth = consoleWidth > 0 ? consoleWidth : widthHint;
+            if (targetWidth <= 0) return;
+
+            string output = text.Length > targetWidth ? text[..targetWidth] : text.PadRight(targetWidth);
             Console.SetCursorPosition(0, row);
-            string output = text.Length > width ? text[..width] : text.PadRight(width);
             Console.Write(output);
         }
 
@@ -185,8 +202,9 @@ namespace stackoverflow_minigame {
         /// Builds a progress bar string with the given progress and width.
         /// Width is clamped between MIN_PROGRESS_BAR_WIDTH and MAX_PROGRESS_BAR_WIDTH.
         /// </summary>
-        private static string BuildProgressBar(float progress, int width) {
-            int clampedWidth = Math.Clamp(width, MIN_PROGRESS_BAR_WIDTH, MAX_PROGRESS_BAR_WIDTH);
+        private static string BuildProgressBar(float progress, int availableWidth) {
+            int effectiveMin = Math.Min(MIN_PROGRESS_BAR_WIDTH, Math.Max(1, availableWidth));
+            int clampedWidth = Math.Clamp(availableWidth, effectiveMin, MAX_PROGRESS_BAR_WIDTH);
             int filled = (int)MathF.Round(progress * clampedWidth);
             if (filled > clampedWidth) filled = clampedWidth;
             string bar = new string('#', filled).PadRight(clampedWidth, '.');
