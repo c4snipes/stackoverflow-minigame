@@ -79,36 +79,95 @@ namespace stackoverflow_minigame {
     }
 
     class Renderer {
-        public void Clear() {
-            Console.Clear();
+        public const int HudRows = 3;
+
+        private char[] frameBuffer = Array.Empty<char>();
+        private char[] paddingBuffer = Array.Empty<char>();
+        private int frameWidth;
+        private int frameHeight;
+        private int worldRenderHeight;
+
+        public int VisibleWidth => frameWidth;
+
+        public void BeginFrame(World world) {
+            int consoleWidth = Console.BufferWidth > 0 ? Console.BufferWidth : world.Width;
+            int consoleHeight = Console.BufferHeight > 0 ? Console.BufferHeight : world.Height + HudRows;
+
+            frameWidth = Math.Min(world.Width, consoleWidth);
+            int availableWorldHeight = Math.Max(0, consoleHeight - HudRows);
+            worldRenderHeight = Math.Min(world.Height, availableWorldHeight);
+            frameHeight = HudRows + worldRenderHeight;
+
+            EnsureBufferSize();
+            Array.Fill(frameBuffer, ' ');
         }
 
         public void Draw(World world) {
-            // Draw platforms first
-            foreach (Entity entity in world.Entities) {
-                if (entity is Player) continue;
-                int screenY = (int)(world.Height - 1 - (entity.Y - world.Offset));
-                if (screenY >= 0 && screenY < world.Height) {
-                    if (entity.X >= 0 && entity.X < world.Width) {
-                        Console.SetCursorPosition(entity.X, screenY);
-                        Console.Write(entity.Symbol);
-                    }
-                }
+            if (frameWidth <= 0 || worldRenderHeight <= 0) {
+                return;
             }
-            // Draw player last (on top of platforms)
-            Entity player = world.Player;
-            int playerScreenY = world.Height - 1 - (int)(player.Y - world.Offset);
-            if (playerScreenY >= 0 && playerScreenY < world.Height) {
-                if (player.X >= 0 && player.X < world.Width) {
-                    Console.SetCursorPosition(player.X, playerScreenY);
-                    Console.Write(player.Symbol);
+
+            foreach (Platform platform in world.Platforms) {
+                BlitEntity(platform, world);
+            }
+
+            BlitEntity(world.Player, world);
+        }
+
+        public void Present() {
+            if (frameWidth <= 0 || frameHeight <= 0) {
+                return;
+            }
+
+            int consoleWidth = Console.BufferWidth > 0 ? Console.BufferWidth : frameWidth;
+            int consoleHeight = Console.BufferHeight > 0 ? Console.BufferHeight : frameHeight;
+            int rowsToWrite = Math.Min(frameHeight, consoleHeight);
+            int columnsToWrite = Math.Min(frameWidth, consoleWidth);
+            int padding = Math.Max(0, consoleWidth - columnsToWrite);
+
+            for (int row = 0; row < rowsToWrite; row++) {
+                if (row >= Console.BufferHeight) {
+                    break;
+                }
+                Console.SetCursorPosition(0, row);
+                Console.Out.Write(frameBuffer, row * frameWidth, columnsToWrite);
+                if (padding > 0) {
+                    EnsurePaddingBuffer(padding);
+                    Console.Out.Write(paddingBuffer, 0, padding);
                 }
             }
         }
 
-        public void Present() {
-            // In console, drawing is immediate, so no additional buffering needed.
-            // This method is included for compatibility.
+        private void EnsureBufferSize() {
+            int required = frameWidth * frameHeight;
+            if (frameBuffer.Length != required) {
+                frameBuffer = required > 0 ? new char[required] : Array.Empty<char>();
+            }
+        }
+
+        private void EnsurePaddingBuffer(int width) {
+            if (paddingBuffer.Length < width) {
+                paddingBuffer = new char[width];
+                Array.Fill(paddingBuffer, ' ');
+            }
+        }
+
+        private void BlitEntity(Entity entity, World world) {
+            int x = entity.X;
+            if (x < 0 || x >= frameWidth) {
+                return;
+            }
+
+            float relativeY = entity.Y - world.Offset;
+            if (relativeY < 0 || relativeY >= worldRenderHeight) {
+                return;
+            }
+
+            int projectedRow = HudRows + (worldRenderHeight - 1 - (int)relativeY);
+            int index = projectedRow * frameWidth + x;
+            if ((uint)index < (uint)frameBuffer.Length) {
+                frameBuffer[index] = entity.Symbol;
+            }
         }
     }
 
@@ -123,7 +182,7 @@ namespace stackoverflow_minigame {
                 if (platform.Y > highestY) highestY = (int)platform.Y;
             }
             while (highestY < world.Offset + world.Height) {
-                int gap = rand.Next(MinPlatformGap, MaxPlatformGap);
+                int gap = rand.Next(MinPlatformGap, MaxPlatformGap + 1);
                 highestY += gap;
                 int newX = rand.Next(world.Width);
                 world.Platforms.Add(new Platform(newX, highestY));
