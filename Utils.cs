@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Security;
 using System.Threading;
 
@@ -19,7 +20,11 @@ namespace stackoverflow_minigame {
         }
 
         public void Start() {
-            if (!SupportsInteractiveInput || listener != null) return;
+            if (!SupportsInteractiveInput) {
+                Diagnostics.ReportFailure("Input.Start skipped because interactive input is unavailable.");
+                return;
+            }
+            if (listener != null) return;
             listener = new Thread(Listen) {
                 IsBackground = true,
                 Name = "ConsoleInputListener"
@@ -57,8 +62,14 @@ namespace stackoverflow_minigame {
                     } else {
                         Thread.Sleep(2);
                     }
-                } catch (InvalidOperationException) {
-                    // Console input became unavailable; exit listener.
+                } catch (InvalidOperationException ex) {
+                    Diagnostics.ReportFailure("Console input became unavailable while listening.", ex);
+                    break;
+                } catch (IOException ex) {
+                    Diagnostics.ReportFailure("Console input read failed.", ex);
+                    break;
+                } catch (SecurityException ex) {
+                    Diagnostics.ReportFailure("Console input is not permitted in this environment.", ex);
                     break;
                 }
             }
@@ -69,7 +80,8 @@ namespace stackoverflow_minigame {
             try {
                 _ = Console.KeyAvailable;
                 return true;
-            } catch (InvalidOperationException) {
+            } catch (InvalidOperationException ex) {
+                Diagnostics.ReportFailure("Console input probing failed.", ex);
                 return false;
             }
         }
@@ -82,30 +94,65 @@ namespace stackoverflow_minigame {
 
     class Renderer {
         public const int HudRows = 3;
+        private const int BorderThickness = 1;
+        private const char BorderCornerChar = '+';
+        private const char BorderHorizontalChar = '-';
+        private const char BorderVerticalChar = '|';
+        private static readonly ConsoleColor BorderColor = ConsoleColor.Cyan;
 
         private char[] frameBuffer = Array.Empty<char>();
         private char[] paddingBuffer = Array.Empty<char>();
         private int frameWidth;
         private int frameHeight;
         private int worldRenderHeight;
+        private bool frameReady;
+        private int interiorLeft;
+        private int interiorRight;
+        private int interiorTopRow;
+        private int interiorBottomRow;
+        private int interiorWidth;
 
         public int VisibleWidth => frameWidth;
 
         public void BeginFrame(World world) {
-            int consoleWidth = Console.BufferWidth > 0 ? Console.BufferWidth : world.Width;
-            int consoleHeight = Console.BufferHeight > 0 ? Console.BufferHeight : world.Height + HudRows;
+            frameReady = false;
+            int consoleWidth = ConsoleSafe.GetBufferWidth(world.Width + BorderThickness * 2);
+            int consoleHeight = ConsoleSafe.GetBufferHeight(world.Height + HudRows);
+            interiorWidth = world.Width;
+            frameWidth = Math.Max(0, interiorWidth) + BorderThickness * 2;
 
-            frameWidth = Math.Min(world.Width, consoleWidth);
-            int availableWorldHeight = Math.Max(0, consoleHeight - HudRows);
+            int availableWorldHeight = Math.Max(0, consoleHeight - HudRows - BorderThickness * 2);
             worldRenderHeight = Math.Min(world.Height, availableWorldHeight);
-            frameHeight = HudRows + worldRenderHeight;
+            frameHeight = HudRows + BorderThickness * 2 + worldRenderHeight;
+
+            interiorLeft = BorderThickness;
+            interiorRight = interiorLeft + Math.Max(0, interiorWidth - 1);
+            interiorTopRow = HudRows + BorderThickness;
+            interiorBottomRow = interiorTopRow + Math.Max(0, worldRenderHeight - 1);
 
             EnsureBufferSize();
-            Array.Fill(frameBuffer, ' ');
+            if (frameBuffer.Length > 0) {
+                Array.Fill(frameBuffer, ' ');
+            }
+
+            DrawBorders();
+
+            frameReady = frameWidth > 0 && frameHeight > 0;
+            if (!frameReady) {
+                Diagnostics.ReportFailure("Renderer.BeginFrame failed because frame dimensions were non-positive.");
+            }
+            if (worldRenderHeight <= 0) {
+                Diagnostics.ReportFailure("Renderer.BeginFrame computed no visible world rows; only HUD will display.");
+            }
         }
 
         public void Draw(World world) {
-            if (frameWidth <= 0 || worldRenderHeight <= 0) {
+            if (!frameReady) {
+                Diagnostics.ReportFailure("Renderer.Draw called before a frame was prepared.");
+                return;
+            }
+
+            if (frameWidth <= 0 || worldRenderHeight <= 0 || interiorWidth <= 0) {
                 return;
             }
 
@@ -117,27 +164,52 @@ namespace stackoverflow_minigame {
         }
 
         public void Present() {
+            if (!frameReady) {
+                Diagnostics.ReportFailure("Renderer.Present called before BeginFrame.");
+                return;
+            }
+
             if (frameWidth <= 0 || frameHeight <= 0) {
                 return;
             }
 
-            int consoleWidth = Console.BufferWidth > 0 ? Console.BufferWidth : frameWidth;
-            int consoleHeight = Console.BufferHeight > 0 ? Console.BufferHeight : frameHeight;
+            int consoleWidth = ConsoleSafe.GetBufferWidth(frameWidth);
+            int consoleHeight = ConsoleSafe.GetBufferHeight(frameHeight);
+            if (consoleWidth <= 0 || consoleHeight <= 0) {
+                return;
+            }
+
             int rowsToWrite = Math.Min(frameHeight, consoleHeight);
             int columnsToWrite = Math.Min(frameWidth, consoleWidth);
+            if (rowsToWrite <= 0 || columnsToWrite <= 0) {
+                return;
+            }
+
             int padding = Math.Max(0, consoleWidth - columnsToWrite);
+            ConsoleColor originalColor;
+            try {
+                originalColor = Console.ForegroundColor;
+            } catch {
+                originalColor = ConsoleColor.Gray;
+            }
 
             for (int row = 0; row < rowsToWrite; row++) {
-                if (row >= Console.BufferHeight) {
+                if (!ConsoleSafe.TrySetCursorPosition(0, row)) {
                     break;
                 }
-                Console.SetCursorPosition(0, row);
-                Console.Out.Write(frameBuffer, row * frameWidth, columnsToWrite);
+                WriteRowWithBorderColor(row, columnsToWrite, originalColor);
                 if (padding > 0) {
                     EnsurePaddingBuffer(padding);
                     Console.Out.Write(paddingBuffer, 0, padding);
                 }
             }
+            try {
+                Console.ForegroundColor = originalColor;
+            } catch {
+                // ignore
+            }
+
+            frameReady = false;
         }
 
         private void EnsureBufferSize() {
@@ -155,41 +227,208 @@ namespace stackoverflow_minigame {
         }
 
         private void BlitEntity(Entity entity, World world) {
-            int x = entity.X;
-            if (x < 0 || x >= frameWidth) {
+            if (worldRenderHeight <= 0 || interiorWidth <= 0) {
                 return;
             }
 
+            int worldX = (int)MathF.Round(entity.X);
+            if (worldX < 0 || worldX >= interiorWidth) {
+                return;
+            }
+
+            int baseX = interiorLeft + worldX;
             float relativeY = entity.Y - world.Offset;
             if (relativeY < 0 || relativeY >= worldRenderHeight) {
                 return;
             }
 
-            int projectedRow = HudRows + (worldRenderHeight - 1 - (int)relativeY);
-            int index = projectedRow * frameWidth + x;
+            int projectedRow = interiorTopRow + (worldRenderHeight - 1 - (int)relativeY);
+            if (entity is Platform platform) {
+                DrawPlatformSpan(projectedRow, baseX, platform.Length, platform.Symbol);
+                return;
+            }
+
+            if (baseX < 0 || baseX >= frameWidth) {
+                return;
+            }
+
+            int index = projectedRow * frameWidth + baseX;
             if ((uint)index < (uint)frameBuffer.Length) {
                 frameBuffer[index] = entity.Symbol;
             }
         }
+
+        private void DrawPlatformSpan(int row, int startX, int length, char symbol) {
+            if (length <= 0) return;
+            int absoluteStart = startX;
+            int absoluteEnd = absoluteStart + length - 1;
+            int clampedStart = Math.Max(interiorLeft, absoluteStart);
+            int clampedEnd = Math.Min(interiorRight, absoluteEnd);
+            if (clampedStart > clampedEnd) return;
+
+            int rowOffset = row * frameWidth + clampedStart;
+            for (int column = clampedStart; column <= clampedEnd; column++) {
+                int index = rowOffset + (column - clampedStart);
+                if ((uint)index < (uint)frameBuffer.Length) {
+                    frameBuffer[index] = symbol;
+                }
+            }
+        }
+
+        private void DrawBorders() {
+            if (frameBuffer.Length == 0 || frameWidth <= 0) return;
+
+            int topBorderStartRow = HudRows;
+            int bottomBorderStartRow = frameHeight - BorderThickness;
+
+            for (int row = 0; row < BorderThickness; row++) {
+                DrawHorizontalBorderRow(topBorderStartRow + row);
+                DrawHorizontalBorderRow(bottomBorderStartRow + row);
+            }
+
+            for (int row = topBorderStartRow + BorderThickness; row < bottomBorderStartRow; row++) {
+                DrawVerticalBorderColumns(row);
+            }
+        }
+
+        private void DrawHorizontalBorderRow(int row) {
+            if (row < 0 || row >= frameHeight) return;
+            int rowBase = row * frameWidth;
+            if (frameWidth <= 0) return;
+            frameBuffer[rowBase] = BorderCornerChar;
+            if (frameWidth == 1) return;
+            for (int column = 1; column < frameWidth - 1; column++) {
+                frameBuffer[rowBase + column] = BorderHorizontalChar;
+            }
+            frameBuffer[rowBase + frameWidth - 1] = BorderCornerChar;
+        }
+
+        private void DrawVerticalBorderColumns(int row) {
+            if (row < 0 || row >= frameHeight) return;
+            if (frameWidth <= 0) return;
+            int leftIndex = row * frameWidth;
+            frameBuffer[leftIndex] = BorderVerticalChar;
+            frameBuffer[leftIndex + frameWidth - 1] = BorderVerticalChar;
+        }
+
+        private void WriteRowWithBorderColor(int row, int visibleColumns, ConsoleColor defaultColor) {
+            int rowStart = row * frameWidth;
+            int processed = 0;
+            while (processed < visibleColumns) {
+                int remaining = visibleColumns - processed;
+                bool borderSegment = IsBorderChar(frameBuffer[rowStart + processed]);
+                int length = 1;
+                while (length < remaining && IsBorderChar(frameBuffer[rowStart + processed + length]) == borderSegment) {
+                    length++;
+                }
+                try {
+                    Console.ForegroundColor = borderSegment ? BorderColor : defaultColor;
+                } catch {
+                    // ignore color failures
+                }
+                Console.Out.Write(frameBuffer, rowStart + processed, length);
+                processed += length;
+            }
+            try {
+                Console.ForegroundColor = defaultColor;
+            } catch {
+                // ignore
+            }
+        }
+
+        private static bool IsBorderChar(char c) =>
+            c == BorderCornerChar || c == BorderHorizontalChar || c == BorderVerticalChar;
     }
 
     class Spawner {
-        private Random rand = new Random();
-        private const int MinPlatformGap = 5;
-        private const int MaxPlatformGap = 10;
+        private readonly Random rand = new Random();
+        private const int EarlyMinGap = 3;
+        private const int EarlyMaxGap = 6;
+        private const int LateMinGap = 8;
+        private const int LateMaxGap = 12;
+        private const float ExtraPlatformEarlyChance = 0.85f;
+        private const float ExtraPlatformLateChance = 0.25f;
+        private const int MaxPlatformsPerBand = 3;
+        private const float BandLevelTolerance = 0.2f;
 
         public void Update(World world) {
-            int highestY = world.Offset;
+            float highestY = world.Offset;
             foreach (Platform platform in world.Platforms) {
-                if (platform.Y > highestY) highestY = (int)platform.Y;
+                if (platform.Y > highestY) highestY = platform.Y;
             }
             while (highestY < world.Offset + world.Height) {
-                int gap = rand.Next(MinPlatformGap, MaxPlatformGap + 1);
+                int gap = GetGap(world);
                 highestY += gap;
-                int newX = rand.Next(world.Width);
-                world.Platforms.Add(new Platform(newX, highestY));
+                int platformsThisBand = GetPlatformsPerBand(world);
+                SpawnPlatformsAt(world, highestY, platformsThisBand);
             }
         }
+
+        private int GetGap(World world) {
+            float progress = GetProgress(world);
+            int minGap = LerpInt(EarlyMinGap, LateMinGap, progress);
+            int maxGap = LerpInt(EarlyMaxGap, LateMaxGap, progress);
+            if (maxGap < minGap) maxGap = minGap;
+            return rand.Next(minGap, maxGap + 1);
+        }
+
+        private int GetPlatformsPerBand(World world) {
+            float progress = GetProgress(world);
+            float chance = LerpFloat(ExtraPlatformEarlyChance, ExtraPlatformLateChance, progress);
+            int count = 1;
+            while (count < MaxPlatformsPerBand && rand.NextDouble() < chance) {
+                count++;
+                chance *= 0.5f;
+            }
+            return count;
+        }
+
+        private void SpawnPlatformsAt(World world, float y, int count) {
+            int placed = 0;
+            int safety = 0;
+            while (placed < count && safety < 40) {
+                safety++;
+                int length = rand.Next(World.MinPlatformLength, World.MaxPlatformLength + 1);
+                int maxStart = Math.Max(0, world.Width - length);
+                int newX = rand.Next(maxStart + 1);
+                if (BandHasOverlap(world, y, newX, length)) {
+                    continue;
+                }
+                world.Platforms.Add(new Platform(newX, y, length));
+                placed++;
+            }
+            if (placed == 0) {
+                int length = rand.Next(World.MinPlatformLength, World.MaxPlatformLength + 1);
+                int maxStart = Math.Max(0, world.Width - length);
+                int newX = rand.Next(maxStart + 1);
+                world.Platforms.Add(new Platform(newX, y, length));
+            }
+        }
+
+        private bool BandHasOverlap(World world, float y, int start, int length) {
+            int end = start + length - 1;
+            foreach (Platform platform in world.Platforms) {
+                if (Math.Abs(platform.Y - y) > BandLevelTolerance) continue;
+                int existingStart = (int)MathF.Round(platform.X);
+                int existingEnd = existingStart + platform.Length - 1;
+                if (RangesOverlap(start, end, existingStart, existingEnd)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool RangesOverlap(int aStart, int aEnd, int bStart, int bEnd) =>
+            aStart <= bEnd && bStart <= aEnd;
+
+        private static float GetProgress(World world) =>
+            Math.Clamp(world.MaxAltitude / World.GoalHeight, 0f, 1f);
+
+        private static int LerpInt(int from, int to, float t) =>
+            (int)MathF.Round(from + (to - from) * t);
+
+        private static float LerpFloat(float from, float to, float t) =>
+            from + (to - from) * t;
     }
 
     static class ConsoleSafe {
@@ -197,13 +436,8 @@ namespace stackoverflow_minigame {
             try {
                 int width = Console.BufferWidth;
                 return width > 0 ? width : fallback;
-            } catch (IOException) {
-                return fallback;
-            } catch (ArgumentOutOfRangeException) {
-                return fallback;
-            } catch (SecurityException) {
-                return fallback;
-            } catch (PlatformNotSupportedException) {
+            } catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or SecurityException or PlatformNotSupportedException) {
+                Diagnostics.ReportFailure("Failed to read console buffer width.", ex);
                 return fallback;
             }
         }
@@ -212,44 +446,53 @@ namespace stackoverflow_minigame {
             try {
                 int height = Console.BufferHeight;
                 return height > 0 ? height : fallback;
-            } catch (IOException) {
-                return fallback;
-            } catch (ArgumentOutOfRangeException) {
-                return fallback;
-            } catch (SecurityException) {
-                return fallback;
-            } catch (PlatformNotSupportedException) {
+            } catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or SecurityException or PlatformNotSupportedException) {
+                Diagnostics.ReportFailure("Failed to read console buffer height.", ex);
                 return fallback;
             }
         }
 
         public static bool TrySetCursorPosition(int left, int top) {
             if (left < 0 || top < 0) {
+                Diagnostics.ReportFailure($"Rejected cursor move to negative coordinate ({left}, {top}).");
                 return false;
             }
 
             int width = GetBufferWidth(-1);
             if (width >= 0 && left >= width) {
+                Diagnostics.ReportFailure($"Rejected cursor move beyond buffer width (left={left}, width={width}).");
                 return false;
             }
 
             int height = GetBufferHeight(-1);
             if (height >= 0 && top >= height) {
+                Diagnostics.ReportFailure($"Rejected cursor move beyond buffer height (top={top}, height={height}).");
                 return false;
             }
 
             try {
                 Console.SetCursorPosition(left, top);
                 return true;
-            } catch (IOException) {
-                return false;
-            } catch (ArgumentOutOfRangeException) {
-                return false;
-            } catch (SecurityException) {
-                return false;
-            } catch (PlatformNotSupportedException) {
+            } catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or SecurityException or PlatformNotSupportedException) {
+                Diagnostics.ReportFailure($"Failed to set cursor position to ({left}, {top}).", ex);
                 return false;
             }
+        }
+    }
+
+    static class Diagnostics {
+        public static event Action<string>? FailureReported;
+
+        public static void ReportFailure(string message, Exception? ex = null, [CallerMemberName] string? caller = null) {
+            var handler = FailureReported;
+            if (handler == null) return;
+
+            string prefix = caller != null ? $"{caller}: {message}" : message;
+            if (ex != null) {
+                prefix = $"{prefix} ({ex.GetType().Name}: {ex.Message})";
+            }
+
+            handler(prefix);
         }
     }
 }

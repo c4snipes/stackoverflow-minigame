@@ -1,6 +1,8 @@
+using System;
+
 namespace stackoverflow_minigame {
     abstract class Entity {
-        public int X { get; set; }
+        public float X { get; set; }
         public float Y { get; set; }
         public abstract char Symbol { get; }
         public virtual void Update() { }
@@ -19,10 +21,12 @@ namespace stackoverflow_minigame {
 
     class Platform : Entity {
         public override char Symbol => '=';
+        public int Length { get; }
 
-        public Platform(int x, float y) {
+        public Platform(int x, float y, int length) {
             X = x;
             Y = y;
+            Length = Math.Max(1, length);
         }
     }
 }
