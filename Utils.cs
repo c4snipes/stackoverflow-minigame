@@ -94,7 +94,7 @@ namespace stackoverflow_minigame {
 
     class Renderer {
         public const int HudRows = 3;
-        private const int BorderThickness = 1;
+        internal const int BorderThickness = 1;
         private const char BorderCornerChar = '+';
         private const char BorderHorizontalChar = '-';
         private const char BorderVerticalChar = '|';
@@ -364,12 +364,22 @@ namespace stackoverflow_minigame {
             }
         }
 
+        private const int MinGapCeiling = 4; // Minimum value used as a floor when calculating the maximum allowed gap
+        private const int HeightDivisorForMaxGap = 2; // Maximum gap is constrained to half the world height
+
         private int GetGap(World world) {
             float progress = GetProgress(world);
             int minGap = LerpInt(EarlyMinGap, LateMinGap, progress);
             int maxGap = LerpInt(EarlyMaxGap, LateMaxGap, progress);
             if (maxGap < minGap) maxGap = minGap;
-            return rand.Next(minGap, maxGap + 1);
+            int gap = rand.Next(minGap, maxGap + 1);
+            int maxAllowedGap = Math.Max(MinGapCeiling, world.Height / HeightDivisorForMaxGap);
+            if (gap > maxAllowedGap) gap = maxAllowedGap;
+            // The gap between platforms is clamped to avoid excessively large jumps that could make the game unplayable.
+            // The maximum allowed gap is tied to the world height to ensure platform spacing scales with the play area,
+            // but is never less than MinGapCeiling. The minimum gap of 1 is enforced to guarantee at least one row
+            // between platforms, preventing overlap or impossible platform placement.
+            return Math.Max(1, gap);
         }
 
         private int GetPlatformsPerBand(World world) {
@@ -388,21 +398,36 @@ namespace stackoverflow_minigame {
             int safety = 0;
             while (placed < count && safety < 40) {
                 safety++;
-                int length = rand.Next(World.MinPlatformLength, World.MaxPlatformLength + 1);
-                int maxStart = Math.Max(0, world.Width - length);
-                int newX = rand.Next(maxStart + 1);
-                if (BandHasOverlap(world, y, newX, length)) {
-                    continue;
+                if (TrySpawnPlatform(world, y)) {
+                    placed++;
                 }
-                world.Platforms.Add(new Platform(newX, y, length));
-                placed++;
             }
             if (placed == 0) {
-                int length = rand.Next(World.MinPlatformLength, World.MaxPlatformLength + 1);
-                int maxStart = Math.Max(0, world.Width - length);
-                int newX = rand.Next(maxStart + 1);
-                world.Platforms.Add(new Platform(newX, y, length));
+                ForceSpawnPlatform(world, y);
             }
+        }
+
+        private bool TrySpawnPlatform(World world, float y) {
+            int length = GeneratePlatformLength(world);
+            int start = GetPlatformStart(world, length);
+            if (BandHasOverlap(world, y, start, length)) {
+                return false;
+            }
+            world.Platforms.Add(new Platform(start, y, length));
+            return true;
+        }
+
+        private void ForceSpawnPlatform(World world, float y) {
+            int length = GeneratePlatformLength(world);
+            int start = GetPlatformStart(world, length);
+            world.Platforms.Add(new Platform(start, y, length));
+        }
+
+        private int GeneratePlatformLength(World world) {
+            // Derive bounds from world width to avoid accessing non-public members.
+            int min = Math.Max(1, Math.Min(3, world.Width));
+            int max = Math.Max(min, Math.Min(world.Width, Math.Max(6, world.Width / 3)));
+            return rand.Next(min, max + 1);
         }
 
         private bool BandHasOverlap(World world, float y, int start, int length) {
@@ -421,8 +446,14 @@ namespace stackoverflow_minigame {
         private static bool RangesOverlap(int aStart, int aEnd, int bStart, int bEnd) =>
             aStart <= bEnd && bStart <= aEnd;
 
+        private int GetPlatformStart(World world, int length) {
+            int interiorMaxStart = Math.Max(0, world.Width - length);
+            return rand.Next(interiorMaxStart + 1);
+        }
+
+
         private static float GetProgress(World world) =>
-            Math.Clamp(world.MaxAltitude / World.GoalHeight, 0f, 1f);
+            Math.Clamp(world.LevelsCompleted / (float)World.GoalPlatforms, 0f, 1f);
 
         private static int LerpInt(int from, int to, float t) =>
             (int)MathF.Round(from + (to - from) * t);

@@ -16,11 +16,14 @@ namespace stackoverflow_minigame {
         public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
 
         public TimeSpan RunTime => TimeSpan.FromTicks(RunTimeTicks);
+        public string VictoryMarker => Victory ? "✓" : "✗";
 
         public ScoreEntry Clone() => (ScoreEntry)MemberwiseClone();
     }
 
     class Scoreboard {
+        public const string DefaultFileName = "scoreboard.jsonl";
+
         private readonly string filePath;
         private readonly List<ScoreEntry> entries = new();
         private readonly object sync = new();
@@ -33,6 +36,29 @@ namespace stackoverflow_minigame {
             this.filePath = filePath;
             EnsureFileExists();
             SyncWithDisk();
+        }
+
+        public static string ResolveDefaultPath() {
+            string baseDir = AppContext.BaseDirectory ?? Directory.GetCurrentDirectory();
+            string currentDir = Directory.GetCurrentDirectory();
+
+            string? located = FindUpwards(new[] { baseDir, currentDir }, DefaultFileName, FindFileUpwards);
+            if (!string.IsNullOrEmpty(located)) return located;
+
+            string? gitRoot = FindUpwards(new[] { baseDir, currentDir }, ".git", FindDirectoryUpwards);
+            if (!string.IsNullOrEmpty(gitRoot)) {
+                return Path.Combine(gitRoot, DefaultFileName);
+            }
+
+            return Path.Combine(baseDir, DefaultFileName);
+        }
+
+        private static string? FindUpwards(IEnumerable<string> searchPaths, string target, Func<string, string, string?> finder) {
+            foreach (var path in searchPaths.Distinct()) {
+                var result = finder(path, target);
+                if (!string.IsNullOrEmpty(result)) return result;
+            }
+            return null;
         }
 
         public void RecordRun(string initials, int score, float maxAltitude, TimeSpan runTime, bool victory) {
@@ -164,6 +190,30 @@ namespace stackoverflow_minigame {
                     i++;
                 }
             }
+        }
+
+        private static string? FindFileUpwards(string start, string fileName) {
+            string? current = start;
+            while (!string.IsNullOrEmpty(current)) {
+                string candidate = Path.Combine(current, fileName);
+                if (File.Exists(candidate)) return candidate;
+                string? parent = Directory.GetParent(current)?.FullName;
+                if (parent == null || parent == current) break;
+                current = parent;
+            }
+            return null;
+        }
+
+        private static string? FindDirectoryUpwards(string start, string directoryName) {
+            string? current = start;
+            while (!string.IsNullOrEmpty(current)) {
+                string candidate = Path.Combine(current, directoryName);
+                if (Directory.Exists(candidate)) return current;
+                string? parent = Directory.GetParent(current)?.FullName;
+                if (parent == null || parent == current) break;
+                current = parent;
+            }
+            return null;
         }
     }
 }

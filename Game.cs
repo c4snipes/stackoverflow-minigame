@@ -34,11 +34,10 @@ namespace stackoverflow_minigame {
         private const float MinDeltaSeconds = 0.01f;
         private const float MaxDeltaSeconds = 0.1f;
         internal const float FrameTimeSeconds = TargetFrameMs / 1000f;
-        internal const float GravityPerSecond = -4.5f; // even lighter gravity for longer airtime
+        internal const float GravityPerSecond = -3.5f; // near zero-G feel for extended airtime
         private const int MIN_PROGRESS_BAR_WIDTH = 10;
         private const int MAX_PROGRESS_BAR_WIDTH = 60;
         private const float HorizontalIntentMemorySeconds = 0.12f;
-        private const string ScoreboardFileName = "scoreboard.jsonl";
 
         private static void DefaultFailureLogger(string message) {
             try {
@@ -49,11 +48,13 @@ namespace stackoverflow_minigame {
         }
 
         public Game() {
-            world = new World(80, 32);
+            // Changed world width from 80 to 60 to improve platform density and enhance gameplay pacing.
+            // This adjustment makes the game area more compact, increasing challenge and reducing empty space.
+            world = new World(60, 32);
             renderer = new Renderer();
             input = new Input();
             spawner = new Spawner();
-            scoreboard = new Scoreboard(ResolveScoreboardPath());
+            scoreboard = new Scoreboard(Scoreboard.ResolveDefaultPath());
         }
 
         public void Run() {
@@ -216,7 +217,7 @@ namespace stackoverflow_minigame {
 
                 if (world.Player.Y < world.Offset) {
                     TriggerGameOver(false);
-                } else if (world.MaxAltitude >= World.GoalHeight) {
+                } else if (world.LevelsCompleted >= World.GoalPlatforms) {
                     TriggerGameOver(true);
                 }
 
@@ -240,12 +241,12 @@ namespace stackoverflow_minigame {
             Console.WriteLine($"Run time: {FormatTimeSpan(runStopwatch.Elapsed)}");
             Console.WriteLine($"Player: {playerInitials}");
             Console.WriteLine();
-            Console.WriteLine("Top Scores:");
+            Console.WriteLine("Top Levels:");
             var topScores = scoreboard.GetTopScores(3);
-            WriteScoreboard(topScores, entry => $"{entry.Initials} - {entry.Score} pts ({FormatTimeSpan(entry.RunTime)})");
+            WriteScoreboard(topScores, entry => $"{entry.VictoryMarker} {entry.Initials} - {entry.Score} lvls ({FormatTimeSpan(entry.RunTime)})");
             Console.WriteLine("Fastest Runs:");
             var fastestRuns = scoreboard.GetFastestRuns(3);
-            WriteScoreboard(fastestRuns, entry => $"{entry.Initials} - {FormatTimeSpan(entry.RunTime)} ({entry.Score} pts)");
+            WriteScoreboard(fastestRuns, entry => $"{entry.VictoryMarker} {entry.Initials} - {FormatTimeSpan(entry.RunTime)} ({entry.Score} lvls)");
             Console.WriteLine("Press R to restart or Q/Esc to quit.");
             input.ClearBuffer();
 
@@ -362,11 +363,11 @@ namespace stackoverflow_minigame {
             int maxHeight = GetRoundedAltitude(world.MaxAltitude);
             int displayedBest = Math.Max(bestFrames, framesClimbed);
             string timeText = FormatTimeSpan(runStopwatch.Elapsed);
-            WriteHudLine(0, $"Player: {playerInitials} | Score: {framesClimbed,4} | Height: {currentHeight,4} | Max: {maxHeight,4} | Best: {displayedBest,4} | Time: {timeText,8}", hudWidth);
+            WriteHudLine(0, $"Player: {playerInitials} | Level: {world.LevelsCompleted,4} | Score: {framesClimbed,4} | Height: {currentHeight,4} | Max: {maxHeight,4} | Best: {displayedBest,4} | Time: {timeText,8}", hudWidth);
 
-            float progress = Math.Clamp(world.MaxAltitude / World.GoalHeight, 0f, 1f);
+            float progress = Math.Clamp(world.LevelsCompleted / (float)World.GoalPlatforms, 0f, 1f);
             string percentText = $"{progress * 100f:0}%";
-            string goalText = $"{World.GoalHeight:0}";
+            string goalText = $"{World.GoalPlatforms} levels";
             int reservedWidth = $"Progress:  {percentText} of goal {goalText}".Length;
             int barAvailable = Math.Max(MIN_PROGRESS_BAR_WIDTH, Math.Min(MAX_PROGRESS_BAR_WIDTH, hudWidth - reservedWidth));
             WriteHudLine(1, $"Progress: {BuildProgressBar(progress, barAvailable)} {percentText} of goal {goalText}", hudWidth);
@@ -403,41 +404,6 @@ namespace stackoverflow_minigame {
             return $"[{bar}]";
         }
 
-        private static string ResolveScoreboardPath() {
-            string? located = FindFileUpwards(Directory.GetCurrentDirectory(), ScoreboardFileName);
-            if (!string.IsNullOrEmpty(located)) return located;
-
-            string? gitRoot = FindDirectoryUpwards(Directory.GetCurrentDirectory(), ".git");
-            if (!string.IsNullOrEmpty(gitRoot)) {
-                return Path.Combine(gitRoot, ScoreboardFileName);
-            }
-
-            return Path.Combine(Directory.GetCurrentDirectory(), ScoreboardFileName);
-        }
-
-        private static string? FindFileUpwards(string start, string fileName) {
-            string? current = start;
-            while (!string.IsNullOrEmpty(current)) {
-                string candidate = Path.Combine(current, fileName);
-                if (File.Exists(candidate)) return candidate;
-                string? parent = Directory.GetParent(current)?.FullName;
-                if (parent == null || parent == current) break;
-                current = parent;
-            }
-            return null;
-        }
-
-        private static string? FindDirectoryUpwards(string start, string directoryName) {
-            string? current = start;
-            while (!string.IsNullOrEmpty(current)) {
-                string candidate = Path.Combine(current, directoryName);
-                if (Directory.Exists(candidate)) return current;
-                string? parent = Directory.GetParent(current)?.FullName;
-                if (parent == null || parent == current) break;
-                current = parent;
-            }
-            return null;
-        }
     }
 
     class World {
@@ -449,18 +415,20 @@ namespace stackoverflow_minigame {
         private readonly Random rand;
         private float manualBoostCooldown = 0f;
         internal List<Platform> Platforms { get { return platforms; } }
-        internal const float JumpVelocity = 5f;
+        internal const float JumpVelocity = 3.6f;
         public float MaxAltitude { get; private set; }
-        public const float GoalHeight = 250f;
+        public int LevelsCompleted { get; private set; }
+        public const int GoalPlatforms = 256;
         public bool LandedThisFrame { get; private set; }
         public bool BorderHitThisFrame { get; private set; }
         private const float ManualBoostCooldownSeconds = 0.75f;
         private const float GroundHorizontalUnitsPerSecond = 18f;
         private const float AirHorizontalSpeedMultiplier = 1.4f;
         private const float FastDropImpulse = -6f;
-        private const float PlatformCatchTolerance = 1.5f;
-        internal const int MinPlatformLength = 4;
-        internal const int MaxPlatformLength = 8;
+        private const int MaxPlatformWidthDivisor = 3;
+        private const int MinPlatformLength = 4; // Minimum platform length to ensure playability
+        internal int MaxPlatformLength => Math.Min(Width, Math.Max(MinPlatformLength, Width / MaxPlatformWidthDivisor));
+        private const int WidthDivisorForMaxPlatform = 3;
 
         public World(int width, int height) {
             Width = width;
@@ -477,17 +445,23 @@ namespace stackoverflow_minigame {
             Offset = 0;
             manualBoostCooldown = 0f;
             MaxAltitude = 0f;
+            LevelsCompleted = 0;
 
             int firstY = 8;
-            int firstLength = rand.Next(MinPlatformLength, MaxPlatformLength + 1);
+            int firstLength = GetRandomPlatformLength();
             int firstStart = Math.Clamp((int)MathF.Round(Player.X) - firstLength / 2, 0, Math.Max(0, Width - firstLength));
             platforms.Add(new Platform(firstStart, firstY, firstLength));
 
             int secondY = firstY + 7;
-            int secondLength = rand.Next(MinPlatformLength, MaxPlatformLength + 1);
+            int secondLength = GetRandomPlatformLength();
             int secondMaxStart = Math.Max(0, Width - secondLength);
             int secondX = rand.Next(secondMaxStart + 1);
             platforms.Add(new Platform(secondX, secondY, secondLength));
+        }
+
+        private int GetRandomPlatformLength() {
+            int maxLength = MaxPlatformLength;
+            return rand.Next(MinPlatformLength, maxLength + 1);
         }
 
         public void Update(float deltaSeconds, int horizontalDirection, bool fastDropRequested) {
@@ -534,6 +508,7 @@ namespace stackoverflow_minigame {
                     Player.VelocityY = World.JumpVelocity;
                     manualBoostCooldown = ManualBoostCooldownSeconds;
                     LandedThisFrame = true;
+                    LevelsCompleted++;
                 }
             }
 

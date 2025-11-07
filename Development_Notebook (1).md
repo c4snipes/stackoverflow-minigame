@@ -9,10 +9,10 @@
 - Use the format below to record your development activities in a clear and consistent manner. 
   - Adding more iteration sections if needed.
 -----
-#### <a name="_8py7xqb2uf7n"></a>**Name: Harrison Sternberg, Cole Snipes**
-#### <a name="_qwnq0539lvl7"></a>**Project/Assignment: Stackoverflow Game**
-##### <a name="_lp87mkuq4f7p"></a>**Problem/Task: Create a console game using C#.**
-##### <a name="_q36rn5rf6131"></a>**Development Log**
+#### Name: Harrison Sternberg, Cole Snipes
+#### Project/Assignment: Stackoverflow Game
+##### Problem/Task: Create a console game using C#.
+##### Development Log
 - **Iteration 1:**
   - **Goal/Task/Rationale:**
       Set up Skeleton
