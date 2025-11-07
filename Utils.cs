@@ -113,21 +113,22 @@ namespace stackoverflow_minigame {
         private int interiorWidth;
 
         public int VisibleWidth => frameWidth;
+        public int VisibleHeight => frameHeight;
 
         public void BeginFrame(World world) {
             frameReady = false;
             int consoleWidth = ConsoleSafe.GetBufferWidth(world.Width + BorderThickness * 2);
-            int consoleHeight = ConsoleSafe.GetBufferHeight(world.Height + HudRows);
+            int consoleHeight = ConsoleSafe.GetBufferHeight(world.Height + HudRows + BorderThickness);
             interiorWidth = world.Width;
             frameWidth = Math.Max(0, interiorWidth) + BorderThickness * 2;
 
-            int availableWorldHeight = Math.Max(0, consoleHeight - HudRows - BorderThickness * 2);
+            int availableWorldHeight = Math.Max(0, consoleHeight - HudRows - BorderThickness);
             worldRenderHeight = Math.Min(world.Height, availableWorldHeight);
-            frameHeight = HudRows + BorderThickness * 2 + worldRenderHeight;
+            frameHeight = HudRows + BorderThickness + worldRenderHeight;
 
             interiorLeft = BorderThickness;
             interiorRight = interiorLeft + Math.Max(0, interiorWidth - 1);
-            interiorTopRow = HudRows + BorderThickness;
+            interiorTopRow = HudRows;
             interiorBottomRow = interiorTopRow + Math.Max(0, worldRenderHeight - 1);
 
             EnsureBufferSize();
@@ -281,12 +282,12 @@ namespace stackoverflow_minigame {
             int topBorderStartRow = HudRows;
             int bottomBorderStartRow = frameHeight - BorderThickness;
 
+            // Only draw bottom border horizontally
             for (int row = 0; row < BorderThickness; row++) {
-                DrawHorizontalBorderRow(topBorderStartRow + row);
                 DrawHorizontalBorderRow(bottomBorderStartRow + row);
             }
 
-            for (int row = topBorderStartRow + BorderThickness; row < bottomBorderStartRow; row++) {
+            for (int row = topBorderStartRow; row < bottomBorderStartRow; row++) {
                 DrawVerticalBorderColumns(row);
             }
         }
@@ -342,12 +343,12 @@ namespace stackoverflow_minigame {
 
     class Spawner {
         private readonly Random rand = new Random();
-        private const int EarlyMinGap = 3;
-        private const int EarlyMaxGap = 6;
-        private const int LateMinGap = 8;
-        private const int LateMaxGap = 12;
-        private const float ExtraPlatformEarlyChance = 0.85f;
-        private const float ExtraPlatformLateChance = 0.25f;
+        private const int EarlyMinGap = 6;
+        private const int EarlyMaxGap = 10;
+        private const int LateMinGap = 12;
+        private const int LateMaxGap = 16;
+        private const float ExtraPlatformEarlyChance = 0.5f;
+        private const float ExtraPlatformLateChance = 0.1f;
         private const int MaxPlatformsPerBand = 3;
         private const float BandLevelTolerance = 0.2f;
 

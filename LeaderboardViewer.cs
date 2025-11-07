@@ -76,7 +76,7 @@ namespace stackoverflow_minigame {
             } else {
                 for (int i = 0; i < topScores.Count; i++) {
                     var entry = topScores[i];
-                    Console.WriteLine($"  {i + 1,2}. {entry.VictoryMarker} {entry.Initials,-3}  {entry.Score,4} lvls  {FormatTime(entry.RunTime)}");
+                    Console.WriteLine($"  {i + 1,2}. {entry.Initials,-3}  {entry.Score,4} lvls  {FormatTime(entry.RunTime)}");
                 }
             }
 
@@ -89,7 +89,7 @@ namespace stackoverflow_minigame {
             } else {
                 for (int i = 0; i < fastest.Count; i++) {
                     var entry = fastest[i];
-                    Console.WriteLine($"  {i + 1,2}. {entry.VictoryMarker} {entry.Initials,-3}  {FormatTime(entry.RunTime),8}  {entry.Score,4} lvls");
+                    Console.WriteLine($"  {i + 1,2}. {entry.Initials,-3}  {FormatTime(entry.RunTime),8}  {entry.Score,4} lvls");
                 }
             }
         }

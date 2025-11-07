@@ -16,8 +16,6 @@ namespace stackoverflow_minigame {
         public DateTime TimestampUtc { get; set; } = DateTime.UtcNow;
 
         public TimeSpan RunTime => TimeSpan.FromTicks(RunTimeTicks);
-        public string VictoryMarker => Victory ? "✓" : "✗";
-
         public ScoreEntry Clone() => (ScoreEntry)MemberwiseClone();
     }
 
