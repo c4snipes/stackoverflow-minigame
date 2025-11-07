@@ -28,6 +28,7 @@ namespace stackoverflow_minigame {
         private float horizontalIntentTimer = 0f;
         private readonly Stopwatch runStopwatch = new();
         private string playerInitials = "AAA";
+        private bool initialsConfirmed = false;
 
         private const int TargetFrameMs = 50;
         private const float MinDeltaSeconds = 0.01f;
@@ -110,12 +111,11 @@ namespace stackoverflow_minigame {
         }
 
         private void StartRun() {
-            if (!TryPromptForInitials(out var initials)) {
+            if (!EnsureInitialsSet()) {
                 state = GameState.Menu;
                 running = true;
                 return;
             }
-            playerInitials = initials;
             state = GameState.Running;
             framesClimbed = 0;
             playerWon = false;
@@ -129,6 +129,20 @@ namespace stackoverflow_minigame {
             runStopwatch.Reset();
             runStopwatch.Start();
             input.ClearBuffer();
+        }
+
+        private bool EnsureInitialsSet() {
+            if (initialsConfirmed && !string.IsNullOrWhiteSpace(playerInitials)) {
+                return true;
+            }
+
+            if (!TryPromptForInitials(out var initials)) {
+                return false;
+            }
+
+            playerInitials = initials;
+            initialsConfirmed = true;
+            return true;
         }
 
         private bool TryPromptForInitials(out string initials) {
