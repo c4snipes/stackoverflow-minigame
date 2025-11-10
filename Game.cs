@@ -115,36 +115,64 @@ namespace stackoverflow_minigame {
                 }
             }
         }
+        // Menu loop: display menu, handle input to start game or view leaderboard.
+        private void MenuLoop()
+        {
+            bool redrawMenu = true;
+            while (state == GameState.Menu && running)
+            {
+                if (redrawMenu)
+                {
+                    RenderMenuHeader();
+                    input.ClearBuffer();
+                    redrawMenu = false;
+                }
 
-        private void MenuLoop() {
-            Console.Clear();
-            ConsoleSafe.TrySetCursorPosition(0, 0);
-            Console.WriteLine("STACKOVERFLOW SKY CLIMBER");
-            Console.WriteLine("You are a lonely stack frame climbing toward accepted glory.");
-            Console.WriteLine("Press any key to start recursion (Q/Esc to bail).");
+                if (!input.SupportsInteractiveInput)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Interactive console input isn't available in this environment.");
+                    Console.WriteLine("Run inside a terminal window to take the jump!");
+                    Thread.Sleep(2000);
+                    running = false;
+                    return;
+                }
 
-            if (!input.SupportsInteractiveInput) {
-                Console.WriteLine();
-                Console.WriteLine("Interactive console input isn't available in this environment.");
-                Console.WriteLine("Run inside a terminal window to take the jump!");
-                Thread.Sleep(2000);
-                running = false;
-                return;
-            }
-
-            input.ClearBuffer();
-
-            while (state == GameState.Menu && running) {
-                if (input.TryReadKey(out var key)) {
-                    if (key.Key == ConsoleKey.Q || key.Key == ConsoleKey.Escape) {
+                if (input.TryReadKey(out var key))
+                {
+                    if (key.Key == ConsoleKey.Q || key.Key == ConsoleKey.Escape)
+                    {
                         running = false;
                         return;
+                    }
+                    if (key.Key == ConsoleKey.L)
+                    {
+                        if (initialsConfirmed)
+                        {
+                            ShowLeaderboard();
+                            redrawMenu = true;
+                        }
+                        else
+                        {
+                            Console.WriteLine("[info] Enter initials first before viewing the leaderboard.");
+                        }
+                        continue;
                     }
                     StartRun();
                     return;
                 }
                 Thread.Sleep(10);
             }
+        }
+        // Renders the menu header and instructions.
+        // Called when entering the menu state or after viewing the leaderboard.    
+        private void RenderMenuHeader()
+        {
+            Console.Clear();
+            ConsoleSafe.TrySetCursorPosition(0, 0);
+            Console.WriteLine("STACKOVERFLOW SKY CLIMBER");
+            Console.WriteLine("You are a lonely stack frame climbing toward accepted glory.");
+            Console.WriteLine("Press any key to start recursion (Q/Esc to bail, L to view leaderboard).");
         }
 
         private void StartRun() {
@@ -167,8 +195,18 @@ namespace stackoverflow_minigame {
             input.ClearBuffer();
         }
 
-        private bool EnsureInitialsSet() {
-            if (initialsConfirmed && !string.IsNullOrWhiteSpace(playerInitials)) {
+        private void ShowLeaderboard() {
+            using (input.PauseListening()) {
+                input.ClearBuffer();
+                LeaderboardViewer viewer = new LeaderboardViewer();
+                viewer.Run(embedded: true);
+            }
+        }
+
+        private bool EnsureInitialsSet()
+        {
+            if (initialsConfirmed && !string.IsNullOrWhiteSpace(playerInitials))
+            {
                 return true;
             }
 
@@ -181,7 +219,8 @@ namespace stackoverflow_minigame {
                 fallback => InitialsFallbackUsed?.Invoke(fallback)
             );
 
-            if (!initialsPrompt.TryCapture(out var initials, playerInitials, callbacks)) {
+            if (!initialsPrompt.TryCapture(out var initials, playerInitials, callbacks))
+            {
                 return false;
             }
 
@@ -192,9 +231,11 @@ namespace stackoverflow_minigame {
 
         // Core gameplay loop: process input, advance world state, render, and keep a stable frame cadence.
         // Central tick loop: pulls input, advances simulation, renders, and enforces the frame cadence.
-        private void GameLoop() {
+        private void GameLoop()
+        {
             Stopwatch deltaTimer = Stopwatch.StartNew();
-            while (state == GameState.Running && running) {
+            while (state == GameState.Running && running)
+            {
                 float deltaSeconds = Math.Clamp((float)deltaTimer.Elapsed.TotalSeconds, MinDeltaSeconds, MaxDeltaSeconds);
                 deltaTimer.Restart();
                 Stopwatch workTimer = Stopwatch.StartNew();
@@ -205,19 +246,24 @@ namespace stackoverflow_minigame {
                 UpdateVisibleRowBudget();
                 world.Update(deltaSeconds, horizontalDirection, fastDropQueued);
                 fastDropQueued = false;
-                if (world.BorderHitThisFrame) {
+                if (world.BorderHitThisFrame)
+                {
                     horizontalDirection = 0;
                     horizontalIntentTimer = 0f;
                 }
                 ClampPlayerWithinBounds();
                 spawner.Update(world);
-            if (world.LevelAwardedThisFrame) {
-                framesClimbed += 1;
-            }
+                if (world.LevelAwardedThisFrame)
+                {
+                    framesClimbed += 1;
+                }
 
-                if (world.Player.Y < world.Offset) {
+                if (world.Player.Y < world.Offset)
+                {
                     TriggerGameOver(false);
-                } else if (world.LevelsCompleted >= World.GoalPlatforms) {
+                }
+                else if (world.LevelsCompleted >= World.GoalPlatforms)
+                {
                     TriggerGameOver(true);
                 }
 
@@ -227,12 +273,13 @@ namespace stackoverflow_minigame {
                 DrawHud();
 
                 int sleepFor = Math.Max(0, TargetFrameMs - (int)workTimer.ElapsedMilliseconds);
-                if (sleepFor > 0) {
+                if (sleepFor > 0)
+                {
                     Thread.Sleep(sleepFor);
                 }
             }
         }
-
+        // Game over loop: display results, handle input to restart or quit.
         private void OverLoop() {
             Console.Clear();
             Console.WriteLine(playerWon ? "YOU CLEARED THE ERROR STACK!" : "*** STACKOVERFLOW EXCEPTION ***");
@@ -248,8 +295,7 @@ namespace stackoverflow_minigame {
             var fastestRuns = scoreboard.GetFastestRuns(3);
             WriteScoreboard(fastestRuns, entry => $"{entry.Initials} - {TimeFormatting.FormatDuration(entry.RunTime)} ({entry.Score} lvls)");
             Console.WriteLine("Press R to restart or Q/Esc to quit.");
-            input.ClearBuffer();
-
+            input.ClearBuffer();                
             while (state == GameState.Over && running) {
                 if (input.TryReadKey(out var key)) {
                     if (key.Key == ConsoleKey.Q || key.Key == ConsoleKey.Escape) {
@@ -264,11 +310,14 @@ namespace stackoverflow_minigame {
                 Thread.Sleep(10);
             }
         }
-
-        private void ProcessGameplayInput(float deltaSeconds) {
+        // Processes gameplay input for movement, fast drop, HUD toggling, and quitting.
+        private void ProcessGameplayInput(float deltaSeconds)
+        {
             bool horizontalInputDetected = false;
-            while (input.TryReadKey(out var key)) {
-                switch (key.Key) {
+            while (input.TryReadKey(out var key))
+            {
+                switch (key.Key)
+                {
                     case ConsoleKey.LeftArrow:
                     case ConsoleKey.A:
                         UpdateHorizontalIntent(-1);
@@ -293,20 +342,22 @@ namespace stackoverflow_minigame {
                 }
             }
 
-            if (!horizontalInputDetected && horizontalDirection != 0) {
+            if (!horizontalInputDetected && horizontalDirection != 0)
+            {
                 horizontalIntentTimer -= deltaSeconds;
-                if (horizontalIntentTimer <= 0f) {
+                if (horizontalIntentTimer <= 0f)
+                {
                     horizontalDirection = 0;
                     horizontalIntentTimer = 0f;
                 }
             }
         }
-
+// Updates the horizontal movement intent based on input direction.
         private void UpdateHorizontalIntent(int direction) {
             horizontalDirection = Math.Clamp(direction, -1, 1);
             horizontalIntentTimer = HorizontalIntentMemorySeconds;
         }
-
+// Cycles the HUD display mode between Full, Compact, and Hidden.
         private void CycleHudMode() {
             hudMode = hudMode switch {
                 HudMode.Full => HudMode.Compact,
@@ -314,7 +365,7 @@ namespace stackoverflow_minigame {
                 _ => HudMode.Full
             };
         }
-
+// Triggers the game over state and records the run outcome.
         private void TriggerGameOver(bool won) {
             if (state == GameState.Over) return;
             playerWon = won;
@@ -340,7 +391,7 @@ namespace stackoverflow_minigame {
                 Console.WriteLine($"  {i + 1}. {formatter(entries[i])}");
             }
         }
-
+// Ensures the player remains within horizontal bounds of the world.
         private void ClampPlayerWithinBounds() {
             world.Player.X = Math.Clamp(world.Player.X, 0f, Math.Max(0, world.Width - 1));
         }
@@ -387,7 +438,8 @@ namespace stackoverflow_minigame {
             string timeText = TimeFormatting.FormatDuration(runStopwatch.Elapsed);
             float distanceFromBottom = world.Player.Y - world.Offset;
             ConsoleColor statsColor = distanceFromBottom < DangerZoneThreshold ? ConsoleColor.Red : ConsoleColor.Gray;
-
+            // Renders the HUD lines with player stats, progress bar, and controls based on the current HUD mode.
+            // The HUD is drawn at the calculated starting row and respects console width constraints.
             WriteHudLine(hudStartRow + 0, $"Player: {playerInitials} | Level: {world.LevelsCompleted,4} | Score: {framesClimbed,4} | Height: {currentHeight,4} | Max: {maxHeight,4} | Best: {displayedBest,4} | Time: {timeText,8}", hudWidth, statsColor);
 
             if (showProgress) {
@@ -408,7 +460,7 @@ namespace stackoverflow_minigame {
                 WriteHudLine(hudStartRow + 2, "Controls: A/D or <-/-> move, S/↓ dives, Space jumps, Q/Esc quits", hudWidth, ConsoleColor.Cyan);
             }
         }
-
+        // Rounds the altitude to the nearest integer for display purposes.
         private static int GetRoundedAltitude(float altitude) => (int)MathF.Round(altitude);
 
         private static void WriteHudLine(int row, string text, int widthHint, ConsoleColor? color = null) {

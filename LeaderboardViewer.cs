@@ -4,6 +4,7 @@ using System.Threading;
 
 namespace stackoverflow_minigame
 {
+    // Displays the leaderboard for the Stackoverflow Skyscraper game.
     class LeaderboardViewer
     {
         private readonly Scoreboard scoreboard;
@@ -18,14 +19,27 @@ namespace stackoverflow_minigame
             scoreboard = new Scoreboard(Scoreboard.ResolveDefaultPath());
         }
 
-        public void Run()
+        public void Run(bool embedded = false)
         {
             Console.Title = "Stackoverflow Skyscraper - Leaderboard";
-            bool singlePass = Console.IsOutputRedirected;
-            if (!singlePass)
+            bool singlePass = embedded ? false : Console.IsOutputRedirected;
+            bool cursorHidden = false;
+            bool shouldRestoreCursor = !singlePass;
+#pragma warning disable CA1416
+            if (shouldRestoreCursor)
             {
-                Console.CursorVisible = false;
+                try
+                {
+                    cursorHidden = Console.CursorVisible;
+                    Console.CursorVisible = false;
+                }
+                catch
+                {
+                    shouldRestoreCursor = false;
+                }
             }
+#pragma warning restore CA1416
+            layoutInitialized = false;
             try
             {
                 do
@@ -39,13 +53,25 @@ namespace stackoverflow_minigame
             }
             finally
             {
-                if (!singlePass)
+#pragma warning disable CA1416
+                if (shouldRestoreCursor)
                 {
-                    Console.CursorVisible = true;
+                    try
+                    {
+                        Console.CursorVisible = cursorHidden;
+                        Console.WriteLine();
+                    }
+                    catch
+                    {
+                        // ignore cursor restore failures
+                    }
                 }
+#pragma warning restore CA1416
             }
         }
-
+        // Waits for the refresh interval or a quit key press.
+        // Returns true if a quit key was pressed.
+        // <returns>True if a quit key was pressed; otherwise, false.</returns>
         private bool WaitOrQuit()
         {
             if (Console.IsInputRedirected)
@@ -133,7 +159,10 @@ namespace stackoverflow_minigame
             WriteSection(true, fastestSectionRow, "Fastest Runs", fastest, consoleWidth, null);
             return true;
         }
-
+        // Writes a section of the leaderboard at a specified console position.
+        /// <summary>
+        /// Writes a section of the leaderboard at a specified console position.
+        /// </summary>
         private void WriteSection(bool usePositioning, int startRow, string title, IReadOnlyList<ScoreEntry> scores, int consoleWidth, string? errorMessage)
         {
             if (!usePositioning) return;
@@ -164,7 +193,7 @@ namespace stackoverflow_minigame
             }
             WriteLineAt(row, string.Empty, consoleWidth);
         }
-
+// Pads the remaining rows in a section with empty entries.
         private int PadRemainingRows(int row, int consoleWidth)
         {
             for (int i = 0; i < EntriesToDisplay; i++)
@@ -183,7 +212,7 @@ namespace stackoverflow_minigame
                 Console.Write(padded);
             }
         }
-
+//
         private void RenderSectionLines(IReadOnlyList<ScoreEntry> scores, int consoleWidth, bool fastest)
         {
             if (scores.Count == 0)
@@ -228,6 +257,7 @@ namespace stackoverflow_minigame
                 errorMessage = ex.Message;
                 return false;
             }
+            // End of TryFetchScores
         }
     }
 }

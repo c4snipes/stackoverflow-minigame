@@ -4,6 +4,15 @@ using System.Collections.Generic;
 
 namespace stackoverflow_minigame
 {
+    /// <summary>
+    /// Provides access to glyph representations for characters used in the game. 
+    /// Glyphs are defined as 5x5 pixel art and can be retrieved for rendering
+    /// purposes. The library includes a fallback mechanism for missing glyphs
+    /// Provides access to glyph representations for characters used in the game.
+    /// Glyphs are defined as 5x5 pixel art and can be retrieved for rendering
+    /// purposes. The library includes a fallback mechanism for missing glyphs
+    /// that substitutes a space glyph and triggers instrumentation events.
+    /// </summary>
     internal static class GlyphLibrary
     {
         public const int GlyphHeight = 5;
@@ -28,7 +37,10 @@ namespace stackoverflow_minigame
         {
             PrimeCacheForAllowedGlyphs();
         }
-
+        // Retrieves the glyph representation for the specified character. If the glyph is not found, returns the fallback glyph.
+        // Caches allowed glyphs for performance.
+        // Triggers instrumentation events for lookup start, success, and fallback.
+        // Uses a thread-safe cache to store decoded glyphs.
         public static string[] GetGlyph(char ch)
         {
             char key = char.ToUpperInvariant(ch);
@@ -67,10 +79,10 @@ namespace stackoverflow_minigame
 
             return glyph;
         }
-
+        // Determines if any glyph lookup instrumentation is subscribed. 
         private static bool HasGlyphInstrumentation =>
             GlyphLookupStarted != null || GlyphLookupSucceeded != null || GlyphLookupFallback != null;
-
+        // Reports the status of glyph loading, including any missing required glyphs.
         public static void ReportStatus()
         {
             if (loadStatusReported) return;
@@ -78,7 +90,18 @@ namespace stackoverflow_minigame
 
             int variants = GlyphBitmaps.Count;
             Diagnostics.ReportInfo($"[GlyphLibrary] Loading glyph art... ({variants} variants registered)");
-
+            //  Check for missing required glyphs.
+            //  Report any missing glyphs from the required set.
+            //  Report success if all required glyphs are present.
+            //  This helps ensure that the initials prompt can render all expected characters.
+            //  Missing glyphs will fall back to the space glyph, which may impact visual fidelity.
+            //  This check runs once at startup to inform developers of any issues with glyph definitions.
+            //  It does not affect runtime behavior beyond logging.
+            //  The required glyphs are defined in the GlyphCharacterSet constant.
+            //  The AllowedGlyphs set is used to determine which glyphs should be cached.
+            //  The GlyphBitmaps dictionary contains the actual bitmap definitions for each glyph.
+            //  The GlyphCache is used to store decoded glyphs for quick retrieval.
+            // The FallbackWarnedGlyphs dictionary tracks which glyphs have already triggered a fallback warning.
             List<char> missing = new();
             foreach (char required in RequiredGlyphs)
             {
@@ -97,7 +120,6 @@ namespace stackoverflow_minigame
                 Diagnostics.ReportWarning($"[GlyphLibrary] Missing glyphs: {string.Join(", ", missing)}");
             }
         }
-
         private static void PrimeCacheForAllowedGlyphs()
         {
             foreach (char allowed in AllowedGlyphs)
@@ -108,7 +130,7 @@ namespace stackoverflow_minigame
                 }
             }
         }
-
+        // Retrieves the bitmap for the fallback glyph (space). Throws if the fallback glyph is not defined.
         private static byte[] GetFallbackBitmap()
         {
             if (GlyphBitmaps.TryGetValue(FallbackGlyphKey, out var fallback))
@@ -117,6 +139,9 @@ namespace stackoverflow_minigame
             }
             throw new InvalidOperationException("GlyphLibrary requires a space glyph (' ') for fallback rendering.");
         }
+
+        // Builds the internal glyph bitmap dictionary from hardcoded definitions. The format is a series of strings
+        // representing rows of pixels, where '1' is a filled pixel and '0' is an empty pixel. For reference, please look at GlyphArtReference.txt. 
 
         private static Dictionary<char, byte[]> BuildGlyphBitmaps()
         {

@@ -8,10 +8,16 @@ namespace stackoverflow_minigame
     // Provides defensive wrappers around console APIs so rendering can degrade gracefully in constrained environments.
     static class ConsoleSafe
     {
+        // Ticks of the last time a warning was issued for buffer dimension access.
+        // Used to throttle warnings to avoid spamming.
+        // Initialized to DateTime.MinValue.Ticks to ensure the first warning is always allowed.
         private static long lastWidthWarningTicks = DateTime.MinValue.Ticks;
         private static long lastHeightWarningTicks = DateTime.MinValue.Ticks;
         private const double WarningCooldownSeconds = 2;
         private static readonly long WarningCooldownTicks = TimeSpan.FromSeconds(WarningCooldownSeconds).Ticks;
+        // Gets the console buffer width, returning a fallback value if unavailable.
+        // If the buffer width cannot be read, a warning is reported (throttled to avoid
+        // spamming).
 
         public static int GetBufferWidth(int fallback)
         {
@@ -29,7 +35,8 @@ namespace stackoverflow_minigame
                 return fallback;
             }
         }
-
+        // Gets the console buffer height, returning a fallback value if unavailable.
+        // If the buffer height cannot be read, a warning is reported (throttled to avoid spamming).
         public static int GetBufferHeight(int fallback)
         {
             try
@@ -76,7 +83,6 @@ namespace stackoverflow_minigame
                 Diagnostics.ReportFailure($"Rejected cursor move beyond buffer width (left={left}, width={width}).");
                 return false;
             }
-
             int height = GetBufferHeight(-1);
             if (height >= 0 && top >= height)
             {
@@ -88,7 +94,9 @@ namespace stackoverflow_minigame
             {
                 return false;
             }
-
+            // Attempt to set the cursor position.  Catch and report any exceptions.
+            // If successful, return true; otherwise, return false.
+            // This method ensures that console rendering does not crash the application in constrained environments.
             try
             {
                 Console.SetCursorPosition(left, top);

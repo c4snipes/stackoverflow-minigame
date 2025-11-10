@@ -4,6 +4,13 @@ using System.Collections.Generic;
 namespace stackoverflow_minigame
 {
     class World
+    // Represents the game world, including the player and platforms.
+    // Manages the state and behavior of the world, including player movement, platform management, and world scrolling.
+    // Provides methods to reset the world, update the state, and enumerate entities.
+    // Contains properties for world dimensions, player state, and game progress.
+    // Initializes a new instance of the World class with specified width and height.
+    // Provides methods to reset the world state, update the world each frame, and manage platforms.
+    // Contains properties for accessing world dimensions, player state, and game progress.
     {
         public int Width { get; }
         public int Height { get; }
@@ -29,7 +36,8 @@ namespace stackoverflow_minigame
         private const int InitialPlatformGap = 7;
         private float highestPlatformTouched;
         private int visibleRowBudget = int.MaxValue;
-
+        // Creates a new world with the specified width and height.
+        // Initializes the player and platform list, and resets the world state.
         public World(int width, int height)
         {
             Width = width;
@@ -59,6 +67,9 @@ namespace stackoverflow_minigame
             int maxLength = Math.Min(Width, MaxPlatformLength);
             return rand.Next(MinPlatformLength, Math.Max(MinPlatformLength, maxLength) + 1);
         }
+        // Adds a seed platform at the specified vertical position.
+        // If centerOnPlayer is true, the platform is centered on the player's current horizontal position; otherwise, it is placed randomly.
+        // Returns the created platform.
 
         private void AddSeedPlatform(int y, bool centerOnPlayer)
         {
@@ -69,7 +80,8 @@ namespace stackoverflow_minigame
                 : rand.Next(Math.Max(0, interiorWidth - length) + 1);
             platforms.Add(Platform.Acquire(start, y, length, interiorWidth));
         }
-
+        // Creates and attempts to add a new platform at the specified vertical position.
+        // Returns true if the platform was successfully added without overlap; otherwise, false.
         // Advances the player and platform state for a single frame, handling horizontal drift, gravity, landings, and scrolling.
         public void Update(float deltaSeconds, int horizontalDirection, bool fastDropRequested)
         {
@@ -93,7 +105,7 @@ namespace stackoverflow_minigame
             float clampedX = Math.Clamp(newX, 0f, horizontalMax);
             BorderHitThisFrame = MathF.Abs(clampedX - newX) > float.Epsilon;
             Player.X = clampedX;
-
+            // Apply fast drop impulse if requested.
             if (fastDropRequested)
             {
                 Player.VelocityY += FastDropImpulse;
@@ -134,7 +146,7 @@ namespace stackoverflow_minigame
                     }
                 }
             }
-
+            // Update player's vertical position and world offset based on visible row budget.
             Player.Y = newY;
             if (Player.Y > MaxAltitude)
             {
@@ -156,7 +168,7 @@ namespace stackoverflow_minigame
                 }
             }
         }
-
+        // Resets the player's position and velocity to the starting state.
         private void ResetPlayer()
         {
             Player ??= new Player(Width / 2, 0);
@@ -164,7 +176,9 @@ namespace stackoverflow_minigame
             Player.Y = 0f;
             Player.VelocityY = 0f;
         }
-
+        // Enumerates all entities in the world, including the player and platforms.
+        // This allows for easy iteration over all game entities for rendering or updates.
+        // Returns an enumerable collection of all entities in the world.
         public IEnumerable<Entity> Entities
         {
             get

@@ -6,6 +6,11 @@ using System.Threading;
 
 namespace stackoverflow_minigame
 {
+    /// <summary>
+    /// Drives an interactive arcade-style initials prompt in the console, capturing user input
+    /// with visual feedback using ASCII art glyphs. Supports character validation, blinking
+    /// cursor, and cancellation.
+    /// </summary>
     sealed class InitialsPrompt
     {
         private readonly Input input;
@@ -50,7 +55,9 @@ namespace stackoverflow_minigame
                 lastBlink = false;
                 lastRenderSucceeded = false;
             }
-
+            // Refreshes the prompt display if there are changes or blink state has toggled.
+            // If forceBlink is true, the cursor will be shown regardless of timing.
+            /// <param name="forceBlink">If true, forces the cursor to be shown on this refresh.</param>
             void RefreshPrompt(bool forceBlink)
             {
                 bool effectiveBlink = forceBlink || (Environment.TickCount / 500 % 2) == 0;
@@ -88,7 +95,14 @@ namespace stackoverflow_minigame
                     initials = fallback;
                     return true;
                 }
-
+                // Handle special keys: Escape to cancel, Enter to commit, Backspace to delete.
+                // Other keys are validated and normalized. 
+                // Accepted characters are appended until maxChars is reached.
+                // Rejected characters trigger the CharRejected callback.
+                // Accepted characters trigger the CharAccepted callback.
+                // Committing triggers the InitialsCommitted callback.
+                // Cancelling triggers the InitialsCanceled callback.
+                // Fallback is used if input fails.
                 if (keyInfo.Key == ConsoleKey.Escape)
                 {
                     callbacks.InitialsCanceled?.Invoke();
@@ -128,7 +142,8 @@ namespace stackoverflow_minigame
                 InvalidateRender();
             }
         }
-
+        // Renders the static parts of the arcade initials prompt and returns the top row of the art and the prompt row.
+        // Returns the top row of the art and the prompt row.
         private static void WriteArcadePrompt(out int artTopRow, out int promptRow)
         {
             ConsoleColor originalColor = Console.ForegroundColor;
@@ -155,7 +170,8 @@ namespace stackoverflow_minigame
                 Console.ForegroundColor = originalColor;
             }
         }
-
+        // Renders the initials art using ASCII glyphs at the specified top row.
+        // Returns true if rendering succeeded; false if an error occurred.
         private static bool TryRenderInitialsArt(string current, int maxChars, int topRow, bool blinkOn)
         {
             if (current.Length > maxChars)
@@ -226,8 +242,11 @@ namespace stackoverflow_minigame
             normalized = default;
             return false;
         }
-
         // Converts the three-character string into pre-concatenated glyph rows so the ASCII banner can be redrawn quickly.
+        // Returns an array of strings, each representing a row of the combined glyphs.
+        // <returns>Array of strings representing the combined glyph rows.</returns>
+        // <param name="padded">The padded string of characters to convert into glyph rows.</param>
+        // <remarks>Each string in the returned array corresponds to a row of the combined glyphs.</remarks>
         private static string[] BuildGlyphRows(string padded)
         {
             string[][] glyphs = new string[padded.Length][];
@@ -257,3 +276,4 @@ namespace stackoverflow_minigame
         }
     }
 }
+/// Renders the initials line with the current input and blinking cursor state.

@@ -37,7 +37,7 @@ The project uses a single SDK-style project file `stackoverflow-minigame.csproj`
 
 **Persistence & Leaderboards**  
 - Finished runs append to `scoreboard.jsonl` (newline-delimited JSON shared in the repo).  
-- Run `dotnet run -- leaderboard` (or `./launch-leaderboard.sh`) in another terminal to view live top-level and fastest-run boards; press `Q`/`Esc` to close the viewer.
+- Run `dotnet run -- leaderboard` (or `./launch-leaderboard.sh`) in another terminal to view live top-level and fastest-run boards; press `Q`/`Esc` to close the viewer. You can also tap `L` on the game’s main menu to open the built-in leaderboard overlay and return with `Q`/`Esc`.
 ## Runtime Flow
 ![Flow of Information](flowOfInformationConsoleGame.png)
 

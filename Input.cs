@@ -6,6 +6,10 @@ using System.Threading;
 
 namespace stackoverflow_minigame
 {
+    /// <summary>
+    /// Manages asynchronous console input handling, allowing for non-blocking key reads,
+    /// pausing/resuming input listening, and safe operation in constrained environments.
+    /// </summary>
     class Input : IDisposable
     {
         private readonly ConcurrentQueue<ConsoleKeyInfo> buffer = new();

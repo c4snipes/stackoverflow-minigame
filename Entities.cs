@@ -22,7 +22,6 @@ namespace stackoverflow_minigame
             VelocityY = 0;
         }
     }
-
     class Platform : Entity
     {
         private static readonly Stack<Platform> Pool = new();
@@ -38,7 +37,7 @@ namespace stackoverflow_minigame
             platform.Initialize(x, y, length, interiorWidth);
             return platform;
         }
-
+// Releases a platform back to the pool for reuse.
         public static void Release(Platform platform)
         {
             Pool.Push(platform);
@@ -53,3 +52,5 @@ namespace stackoverflow_minigame
         }
     }
 }
+// End of entities.cs
+// ----------------------------------------------------------------

@@ -69,8 +69,11 @@ namespace stackoverflow_minigame
 
             GlyphLibrary.GlyphLookupFallback += ch => Diagnostics.ReportWarning($"Glyph lookup fallback for: {ch}");
         }
-
         // Parses CLI switches into a normalized set, tracking unknown options and rejecting unsupported syntaxes.
+        // <param name="args">The raw command-line arguments.</param>
+        // <param name="unknown">Outputs a list of unrecognized options.</param>
+        // <param name="parseError">Outputs true if any parsing errors were encountered.</param>
+        // <returns>A set of recognized, normalized options.</returns>
         private static HashSet<string> NormalizeArgs(string[] args, out List<string> unknown, out bool parseError)
         {
             HashSet<string> normalized = new(StringComparer.OrdinalIgnoreCase);
@@ -99,7 +102,7 @@ namespace stackoverflow_minigame
             }
             return normalized;
         }
-
+        // Prints usage information to the console.
         private static void PrintUsage()
         {
             Console.WriteLine("Usage:");

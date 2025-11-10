@@ -105,9 +105,13 @@ namespace stackoverflow_minigame
         private int GeneratePlatformLength(World world)
         {
             int interiorWidth = Math.Max(1, world.Width - Renderer.BorderThickness * 2);
-            int maxLength = Math.Max(World.MinPlatformLength, interiorWidth / 3);
             int minLength = World.MinPlatformLength;
-            maxLength = Math.Max(minLength, maxLength);
+            int baseMax = Math.Max(minLength, interiorWidth / 3);
+
+            float progress = GetProgress(world);
+            float shrinkFactor = LerpFloat(1f, 0.35f, progress);
+            int maxLength = Math.Max(minLength + 1, (int)MathF.Round(baseMax * shrinkFactor));
+
             return rand.Next(minLength, maxLength + 1);
         }
 

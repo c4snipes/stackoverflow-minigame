@@ -5,6 +5,13 @@ namespace stackoverflow_minigame
 {
     static class Diagnostics
     {
+        // Events for reporting diagnostics messages.
+        // Subscribers can listen to these events to handle diagnostics output.
+        // If no subscribers are present, messages are enqueued to the Tracing system.
+        // Each event provides a string message with context about the diagnostic.
+        // FailureReported is invoked for critical errors that may affect game functionality.
+        // WarningReported is invoked for non-critical issues that may impact user experience.
+        // InfoReported is invoked for informational messages about game state or actions.
         public static event Action<string>? FailureReported;
         public static event Action<string>? WarningReported;
         public static event Action<string>? InfoReported;
@@ -25,7 +32,6 @@ namespace stackoverflow_minigame
                 Tracing.Enqueue(prefix);
             }
         }
-
         public static void ReportWarning(string message, [CallerMemberName] string? caller = null)
         {
             string prefix = BuildPrefix(message, caller);
