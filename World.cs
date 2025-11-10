@@ -26,6 +26,7 @@ namespace stackoverflow_minigame {
         private const int InitialPlatformY = 8;
         private const int InitialPlatformGap = 7;
         private float highestPlatformTouched;
+        private int visibleRowBudget = int.MaxValue;
 
         public World(int width, int height) {
             Width = width;
@@ -50,8 +51,8 @@ namespace stackoverflow_minigame {
         }
 
         private int GetRandomPlatformLength() {
-            int maxLength = MaxPlatformLength;
-            return rand.Next(MinPlatformLength, maxLength + 1);
+            int maxLength = Math.Min(Width, MaxPlatformLength);
+            return rand.Next(MinPlatformLength, Math.Max(MinPlatformLength, maxLength) + 1);
         }
 
         private void AddSeedPlatform(int y, bool centerOnPlayer) {
@@ -106,11 +107,10 @@ namespace stackoverflow_minigame {
                     newY = collidePlatform.Y;
                     Player.VelocityY = World.JumpVelocity;
                     LandedThisFrame = true;
-                    if (collidePlatform.Y > highestPlatformTouched) {
-                        if (float.IsNegativeInfinity(highestPlatformTouched)) {
-                            highestPlatformTouched = collidePlatform.Y;
-                        } else {
-                            highestPlatformTouched = collidePlatform.Y;
+                    if (collidePlatform.Y > highestPlatformTouched + float.Epsilon) {
+                        bool hasTouchedBefore = !float.IsNegativeInfinity(highestPlatformTouched);
+                        highestPlatformTouched = collidePlatform.Y;
+                        if (hasTouchedBefore) {
                             LevelsCompleted++;
                             LevelAwardedThisFrame = true;
                         }
@@ -123,7 +123,8 @@ namespace stackoverflow_minigame {
                 MaxAltitude = Player.Y;
             }
 
-            int threshold = Height / 2;
+            int thresholdSource = visibleRowBudget <= 0 ? Height : visibleRowBudget;
+            int threshold = Math.Max(1, Math.Min(Height / 2, thresholdSource / 2));
             if (Player.Y > threshold) {
                 Offset = (int)(Player.Y - threshold);
             }
@@ -142,6 +143,10 @@ namespace stackoverflow_minigame {
                 yield return Player;
                 foreach (Platform p in platforms) yield return p;
             }
+        }
+
+        public void SetVisibleRowBudget(int rows) {
+            visibleRowBudget = Math.Max(1, rows);
         }
     }
 }

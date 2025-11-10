@@ -82,17 +82,14 @@ namespace stackoverflow_minigame {
             if (entry == null) throw new ArgumentNullException(nameof(entry));
             lock (sync) {
                 AppendEntry(entry);
-                entries.Clear();
-                entries.AddRange(ReadEntriesFromDisk());
+                entries.Add(entry.Clone());
             }
         }
 
         public IReadOnlyList<ScoreEntry> GetTopScores(int count) {
-            List<ScoreEntry> fresh = ReadEntriesFromDisk();
             lock (sync) {
-                entries.Clear();
-                entries.AddRange(fresh);
-                return entries
+                var snapshot = RefreshEntriesFromDisk();
+                return snapshot
                     .OrderByDescending(e => e.Score)
                     .ThenBy(e => e.RunTimeTicks)
                     .Take(count)
@@ -102,11 +99,9 @@ namespace stackoverflow_minigame {
         }
 
         public IReadOnlyList<ScoreEntry> GetFastestRuns(int count) {
-            List<ScoreEntry> fresh = ReadEntriesFromDisk();
             lock (sync) {
-                entries.Clear();
-                entries.AddRange(fresh);
-                return entries
+                var snapshot = RefreshEntriesFromDisk();
+                return snapshot
                     .Where(e => e.RunTimeTicks > 0)
                     .OrderBy(e => e.RunTimeTicks)
                     .ThenByDescending(e => e.Score)
@@ -131,6 +126,13 @@ namespace stackoverflow_minigame {
             using FileStream stream = new(filePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
             using StreamWriter writer = new(stream, Encoding.UTF8);
             writer.WriteLine(payload);
+        }
+
+        private List<ScoreEntry> RefreshEntriesFromDisk() {
+            var fresh = ReadEntriesFromDisk();
+            entries.Clear();
+            entries.AddRange(fresh);
+            return entries;
         }
 
         private List<ScoreEntry> ReadEntriesFromDisk() {

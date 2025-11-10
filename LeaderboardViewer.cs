@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace stackoverflow_minigame {
@@ -69,7 +70,11 @@ namespace stackoverflow_minigame {
                 Console.WriteLine("Live Leaderboard");
             }
             Console.WriteLine(new string('=', 50));
-            var topScores = scoreboard.GetTopScores(EntriesToDisplay);
+            if (!TryFetchScores(() => scoreboard.GetTopScores(EntriesToDisplay), "top scores", out var topScores)) {
+                Console.WriteLine("Top Levels");
+                Console.WriteLine("  (unable to load scoreboard)");
+                return;
+            }
             Console.WriteLine("Top Levels");
             if (topScores.Count == 0) {
                 Console.WriteLine("  (no runs recorded)");
@@ -82,7 +87,11 @@ namespace stackoverflow_minigame {
 
             Console.WriteLine();
 
-            var fastest = scoreboard.GetFastestRuns(EntriesToDisplay);
+            if (!TryFetchScores(() => scoreboard.GetFastestRuns(EntriesToDisplay), "fastest runs", out var fastest)) {
+                Console.WriteLine("Fastest Runs");
+                Console.WriteLine("  (unable to load scoreboard)");
+                return;
+            }
             Console.WriteLine("Fastest Runs");
             if (fastest.Count == 0) {
                 Console.WriteLine("  (no completed runs)");
@@ -97,6 +106,17 @@ namespace stackoverflow_minigame {
         private static string FormatTime(TimeSpan span) {
             if (span <= TimeSpan.Zero) return "--:--.--";
             return span.ToString(@"mm\:ss\.ff");
+        }
+
+        private static bool TryFetchScores(Func<IReadOnlyList<ScoreEntry>> fetch, string label, out IReadOnlyList<ScoreEntry> scores) {
+            try {
+                scores = fetch();
+                return true;
+            } catch (Exception ex) {
+                Diagnostics.ReportFailure($"Leaderboard viewer failed to read {label}.", ex);
+                scores = Array.Empty<ScoreEntry>();
+                return false;
+            }
         }
     }
 }

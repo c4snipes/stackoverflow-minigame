@@ -468,7 +468,9 @@ namespace stackoverflow_minigame {
         public static int GetBufferWidth(int fallback) {
             try {
                 int width = Console.BufferWidth;
-                return width > 0 ? width : fallback;
+                if (width > 0) return width;
+                Diagnostics.ReportWarning($"Console reported non-positive buffer width ({width}); using fallback {fallback}.");
+                return fallback;
             } catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or SecurityException or PlatformNotSupportedException) {
                 Diagnostics.ReportFailure("Failed to read console buffer width.", ex);
                 return fallback;
@@ -478,7 +480,9 @@ namespace stackoverflow_minigame {
         public static int GetBufferHeight(int fallback) {
             try {
                 int height = Console.BufferHeight;
-                return height > 0 ? height : fallback;
+                if (height > 0) return height;
+                Diagnostics.ReportWarning($"Console reported non-positive buffer height ({height}); using fallback {fallback}.");
+                return fallback;
             } catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or SecurityException or PlatformNotSupportedException) {
                 Diagnostics.ReportFailure("Failed to read console buffer height.", ex);
                 return fallback;
@@ -515,17 +519,28 @@ namespace stackoverflow_minigame {
 
     static class Diagnostics {
         public static event Action<string>? FailureReported;
+        public static event Action<string>? WarningReported;
+        public static event Action<string>? InfoReported;
 
         public static void ReportFailure(string message, Exception? ex = null, [CallerMemberName] string? caller = null) {
-            var handler = FailureReported;
-            if (handler == null) return;
-
-            string prefix = caller != null ? $"{caller}: {message}" : message;
+            string prefix = BuildPrefix(message, caller);
             if (ex != null) {
                 prefix = $"{prefix} ({ex.GetType().Name}: {ex.Message})";
             }
-
-            handler(prefix);
+            FailureReported?.Invoke(prefix);
         }
+
+        public static void ReportWarning(string message, [CallerMemberName] string? caller = null) {
+            string prefix = BuildPrefix(message, caller);
+            WarningReported?.Invoke(prefix);
+        }
+
+        public static void ReportInfo(string message, [CallerMemberName] string? caller = null) {
+            string prefix = BuildPrefix(message, caller);
+            InfoReported?.Invoke(prefix);
+        }
+
+        private static string BuildPrefix(string message, string? caller) =>
+            caller != null ? $"{caller}: {message}" : message;
     }
 }
