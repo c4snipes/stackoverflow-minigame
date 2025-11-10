@@ -10,6 +10,7 @@ namespace stackoverflow_minigame {
     class Input : IDisposable {
         private readonly ConcurrentQueue<ConsoleKeyInfo> buffer = new();
         private readonly CancellationTokenSource cancellation = new();
+        private readonly ManualResetEventSlim resumeSignal = new(true);
         private Thread? listener;
         private const int LISTENER_SHUTDOWN_TIMEOUT_MS = 1000;
 
@@ -36,6 +37,7 @@ namespace stackoverflow_minigame {
             Thread? thread = listener;
             try {
                 cancellation.Cancel();
+                resumeSignal.Set();
             } catch (ObjectDisposedException) {
                 // Already disposed, ignore.
             }
@@ -53,14 +55,26 @@ namespace stackoverflow_minigame {
             while (buffer.TryDequeue(out _)) { }
         }
 
+        public IDisposable PauseListening() {
+            resumeSignal.Reset();
+            return new ResumeHandle(this);
+        }
+
+        private void ResumeListening() {
+            resumeSignal.Set();
+        }
+
         private void Listen() {
             var token = cancellation.Token;
             while (!token.IsCancellationRequested) {
                 try {
+                    resumeSignal.Wait(token);
+                } catch (OperationCanceledException) {
+                    break;
+                }
+                if (token.IsCancellationRequested) break;
+                try {
                     if (Console.KeyAvailable) {
-                        if (token.IsCancellationRequested) {
-                            break;
-                        }
                         var key = Console.ReadKey(intercept: true);
                         buffer.Enqueue(key);
                     } else {
@@ -95,6 +109,22 @@ namespace stackoverflow_minigame {
         public void Dispose() {
             Stop();
             cancellation.Dispose();
+            resumeSignal.Dispose();
+        }
+
+        private sealed class ResumeHandle : IDisposable {
+            private readonly Input owner;
+            private bool disposed;
+
+            public ResumeHandle(Input owner) {
+                this.owner = owner;
+            }
+
+            public void Dispose() {
+                if (disposed) return;
+                disposed = true;
+                owner.ResumeListening();
+            }
         }
     }
 

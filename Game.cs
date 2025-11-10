@@ -45,14 +45,13 @@ namespace stackoverflow_minigame {
         private const float MinDeltaSeconds = 0.01f;
         private const float MaxDeltaSeconds = 0.1f;
         internal const float FrameTimeSeconds = TargetFrameMs / 1000f;
-        internal const float GravityPerSecond = -3.2f; // near zero-G feel for extended airtime
+        internal const float GravityPerSecond = -3.0f; // near zero-G feel for extended airtime
         private const int MIN_PROGRESS_BAR_WIDTH = 10;
         private const int MAX_PROGRESS_BAR_WIDTH = 60;
         private const float HorizontalIntentMemorySeconds = 0.12f;
         private const float DangerZoneThreshold = 3f;
         private const int BigGlyphHeight = GlyphLibrary.GlyphHeight;
 
-        private static readonly Dictionary<string, string[]> InitialsGlyphCache = new(StringComparer.Ordinal);
         [ThreadStatic] private static StringBuilder? GlyphLineBuilder;
 
         private static void DefaultFailureLogger(string message) {
@@ -175,13 +174,15 @@ namespace stackoverflow_minigame {
                 return true;
             }
 
-            if (!TryPromptForInitials(out var initials)) {
-                return false;
+            using (input.PauseListening()) {
+                input.ClearBuffer();
+                if (!TryPromptForInitials(out var initials)) {
+                    return false;
+                }
+                playerInitials = initials;
+                initialsConfirmed = true;
+                return true;
             }
-
-            playerInitials = initials;
-            initialsConfirmed = true;
-            return true;
         }
 
         // Runs the interactive initials workflow: blinking banner, validation, and callback signaling.
@@ -311,7 +312,7 @@ namespace stackoverflow_minigame {
             }
 
             string padded = current.PadRight(maxChars, blinkOn ? '_' : ' ');
-            string[] composedRows = GetInitialsGlyphRows(padded);
+            string[] composedRows = BuildInitialsGlyphRows(padded);
             try {
                 for (int row = 0; row < BigGlyphHeight; row++) {
                     if (!ConsoleSafe.TrySetCursorPosition(0, topRow + row)) {
@@ -332,11 +333,7 @@ namespace stackoverflow_minigame {
             }
         }
 
-        private static string[] GetInitialsGlyphRows(string padded) {
-            if (InitialsGlyphCache.TryGetValue(padded, out var cached)) {
-                return cached;
-            }
-
+        private static string[] BuildInitialsGlyphRows(string padded) {
             string[][] glyphRows = new string[padded.Length][];
             for (int i = 0; i < padded.Length; i++) {
                 glyphRows[i] = GlyphLibrary.GetGlyph(padded[i]);
@@ -351,8 +348,6 @@ namespace stackoverflow_minigame {
                 }
                 composed[row] = builder.ToString();
             }
-
-            InitialsGlyphCache[padded] = composed;
             return composed;
         }
 
