@@ -95,11 +95,8 @@ namespace stackoverflow_minigame {
         }
 
         private static string FormatTime(TimeSpan span) {
-            if (span < TimeSpan.Zero)
-                return span.TotalHours >= 1 ? "--:--:--" : "--:--.--";
-            if (span == TimeSpan.Zero)
-                return span.TotalHours >= 1 ? "00:00:00" : "00:00.00";
-            return span.TotalHours >= 1 ? span.ToString(@"hh\:mm\:ss") : span.ToString(@"mm\:ss\.ff");
+            if (span <= TimeSpan.Zero) return "--:--.--";
+            return span.ToString(@"mm\:ss\.ff");
         }
     }
 }

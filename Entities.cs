@@ -23,10 +23,12 @@ namespace stackoverflow_minigame {
         public override char Symbol => '=';
         public int Length { get; }
 
-        public Platform(int x, float y, int length) {
-            X = x;
+        public Platform(int x, float y, int length, int interiorWidth) {
+            int clampedLength = Math.Max(1, length);
+            clampedLength = Math.Min(clampedLength, Math.Max(1, interiorWidth));
+            X = Math.Clamp(x, 0, Math.Max(0, interiorWidth - clampedLength));
             Y = y;
-            Length = Math.Max(1, length);
+            Length = clampedLength;
         }
     }
 }

@@ -22,13 +22,14 @@ namespace stackoverflow_minigame {
         private int framesClimbed = 0;
         private int bestFrames = 0;
         private bool playerWon = false;
-        private bool manualBoostQueued = false;
         private bool fastDropQueued = false;
         private int horizontalDirection = 0;
         private float horizontalIntentTimer = 0f;
         private readonly Stopwatch runStopwatch = new();
         private string playerInitials = "AAA";
         private bool initialsConfirmed = false;
+        private enum HudMode { Full, Compact, Hidden }
+        private HudMode hudMode = HudMode.Full;
 
         private const int TargetFrameMs = 50;
         private const float MinDeltaSeconds = 0.01f;
@@ -38,6 +39,7 @@ namespace stackoverflow_minigame {
         private const int MIN_PROGRESS_BAR_WIDTH = 10;
         private const int MAX_PROGRESS_BAR_WIDTH = 60;
         private const float HorizontalIntentMemorySeconds = 0.12f;
+        private const float DangerZoneThreshold = 3f;
 
         private static void DefaultFailureLogger(string message) {
             try {
@@ -120,7 +122,6 @@ namespace stackoverflow_minigame {
             state = GameState.Running;
             framesClimbed = 0;
             playerWon = false;
-            manualBoostQueued = false;
             fastDropQueued = false;
             horizontalDirection = 0;
             horizontalIntentTimer = 0f;
@@ -197,10 +198,6 @@ namespace stackoverflow_minigame {
                 Stopwatch workTimer = Stopwatch.StartNew();
 
                 ProcessGameplayInput(deltaSeconds);
-                if (manualBoostQueued) {
-                    world.TryManualBoost();
-                    manualBoostQueued = false;
-                }
                 if (!running || state != GameState.Running) break;
 
                 world.Update(deltaSeconds, horizontalDirection, fastDropQueued);
@@ -211,9 +208,9 @@ namespace stackoverflow_minigame {
                 }
                 ClampPlayerWithinBounds();
                 spawner.Update(world);
-                if (world.LandedThisFrame) {
-                    framesClimbed += 1;
-                }
+            if (world.LevelAwardedThisFrame) {
+                framesClimbed += 1;
+            }
 
                 if (world.Player.Y < world.Offset) {
                     TriggerGameOver(false);
@@ -283,10 +280,8 @@ namespace stackoverflow_minigame {
                     case ConsoleKey.S:
                         fastDropQueued = true;
                         break;
-                    case ConsoleKey.UpArrow:
-                    case ConsoleKey.W:
-                    case ConsoleKey.Spacebar:
-                        manualBoostQueued = true;
+                    case ConsoleKey.H:
+                        CycleHudMode();
                         break;
                     case ConsoleKey.Q:
                     case ConsoleKey.Escape:
@@ -307,6 +302,14 @@ namespace stackoverflow_minigame {
         private void UpdateHorizontalIntent(int direction) {
             horizontalDirection = Math.Clamp(direction, -1, 1);
             horizontalIntentTimer = HorizontalIntentMemorySeconds;
+        }
+
+        private void CycleHudMode() {
+            hudMode = hudMode switch {
+                HudMode.Full => HudMode.Compact,
+                HudMode.Compact => HudMode.Hidden,
+                _ => HudMode.Full
+            };
         }
 
         private void TriggerGameOver(bool won) {
@@ -346,6 +349,8 @@ namespace stackoverflow_minigame {
         }
 
         private void DrawHud() {
+            if (hudMode == HudMode.Hidden) return;
+
             int fallbackWidth = renderer.VisibleWidth > 0 ? renderer.VisibleWidth : 1;
             int consoleWidth = ConsoleSafe.GetBufferWidth(fallbackWidth);
             if (consoleWidth <= 0) {
@@ -359,29 +364,57 @@ namespace stackoverflow_minigame {
                 return;
             }
 
+            // Place the HUD immediately below the rendered playfield but never
+            // beyond the console's buffer height. When the buffer is tiny we
+            // clamp the HUD into the available rows.
             int consoleHeight = ConsoleSafe.GetBufferHeight(renderer.VisibleHeight + Renderer.HudRows);
-            int hudStartRow = consoleHeight > 0 ? Math.Max(renderer.VisibleHeight, consoleHeight - Renderer.HudRows) : renderer.VisibleHeight;
+            if (consoleHeight <= 0) {
+                consoleHeight = renderer.VisibleHeight + Renderer.HudRows;
+            }
+            int hudStartRow = Math.Max(renderer.VisibleHeight, consoleHeight - Renderer.HudRows);
+            if (hudStartRow < 0 || hudStartRow + Renderer.HudRows > consoleHeight) {
+                hudStartRow = Math.Max(0, consoleHeight - Renderer.HudRows);
+            }
+
+            int hudRowsAvailable = Math.Max(0, consoleHeight - hudStartRow);
+            bool showProgress = hudMode == HudMode.Full && hudRowsAvailable >= 2;
+            bool showControls = hudMode == HudMode.Full && hudRowsAvailable >= 3;
+            if (hudMode == HudMode.Compact) {
+                showProgress = false;
+                showControls = false;
+            }
 
             int currentHeight = GetRoundedAltitude(world.Player.Y);
             int maxHeight = GetRoundedAltitude(world.MaxAltitude);
             int displayedBest = Math.Max(bestFrames, framesClimbed);
             string timeText = FormatTimeSpan(runStopwatch.Elapsed);
+            float distanceFromBottom = world.Player.Y - world.Offset;
+            ConsoleColor statsColor = distanceFromBottom < DangerZoneThreshold ? ConsoleColor.Red : ConsoleColor.Gray;
 
-            WriteHudLine(hudStartRow + 0, $"Player: {playerInitials} | Level: {world.LevelsCompleted,4} | Score: {framesClimbed,4} | Height: {currentHeight,4} | Max: {maxHeight,4} | Best: {displayedBest,4} | Time: {timeText,8}", hudWidth);
+            WriteHudLine(hudStartRow + 0, $"Player: {playerInitials} | Level: {world.LevelsCompleted,4} | Score: {framesClimbed,4} | Height: {currentHeight,4} | Max: {maxHeight,4} | Best: {displayedBest,4} | Time: {timeText,8}", hudWidth, statsColor);
 
-            float progress = Math.Clamp(world.LevelsCompleted / (float)World.GoalPlatforms, 0f, 1f);
-            string percentText = $"{progress * 100f:0}%";
-            string goalText = $"{World.GoalPlatforms} levels";
-            int reservedWidth = $"Progress:  {percentText} of goal {goalText}".Length;
-            int barAvailable = Math.Max(MIN_PROGRESS_BAR_WIDTH, Math.Min(MAX_PROGRESS_BAR_WIDTH, hudWidth - reservedWidth));
-            WriteHudLine(hudStartRow + 1, $"Progress: {BuildProgressBar(progress, barAvailable)} {percentText} of goal {goalText}", hudWidth);
+            if (showProgress) {
+                float progress = Math.Clamp(world.LevelsCompleted / (float)World.GoalPlatforms, 0f, 1f);
+                string percentText = $"{progress * 100f:0}%";
+                string goalText = $"{World.GoalPlatforms} levels";
+                int reservedWidth = $"Progress:  {percentText} of goal {goalText}".Length;
+                int barAvailable = Math.Max(MIN_PROGRESS_BAR_WIDTH, Math.Min(MAX_PROGRESS_BAR_WIDTH, hudWidth - reservedWidth));
+                ConsoleColor progressColor = progress switch {
+                    >= 0.66f => ConsoleColor.Green,
+                    >= 0.33f => ConsoleColor.Yellow,
+                    _ => ConsoleColor.Red
+                };
+                WriteHudLine(hudStartRow + 1, $"Progress: {BuildProgressBar(progress, barAvailable)} {percentText} of goal {goalText}", hudWidth, progressColor);
+            }
 
-            WriteHudLine(hudStartRow + 2, "Controls: A/D or <-/-> move, S/↓ dives, Space jumps, Q/Esc quits", hudWidth);
+            if (showControls) {
+                WriteHudLine(hudStartRow + 2, "Controls: A/D or <-/-> move, S/↓ dives, Space jumps, Q/Esc quits", hudWidth, ConsoleColor.Cyan);
+            }
         }
 
         private static int GetRoundedAltitude(float altitude) => (int)MathF.Round(altitude);
 
-        private static void WriteHudLine(int row, string text, int widthHint) {
+        private static void WriteHudLine(int row, string text, int widthHint, ConsoleColor? color = null) {
             int bufferHeight = ConsoleSafe.GetBufferHeight(-1);
             if (bufferHeight >= 0 && row >= bufferHeight) {
                 Diagnostics.ReportFailure($"WriteHudLine skipped row {row} because it exceeds buffer height {bufferHeight}.");
@@ -397,7 +430,14 @@ namespace stackoverflow_minigame {
 
             string output = text.Length > consoleWidth ? text[..consoleWidth] : text.PadRight(consoleWidth);
             if (!ConsoleSafe.TrySetCursorPosition(0, row)) return;
+            ConsoleColor originalColor = Console.ForegroundColor;
+            if (color.HasValue) {
+                Console.ForegroundColor = color.Value;
+            }
             Console.Out.Write(output);
+            if (color.HasValue) {
+                Console.ForegroundColor = originalColor;
+            }
         }
 
         private static string BuildProgressBar(float progress, int width) {
@@ -410,143 +450,4 @@ namespace stackoverflow_minigame {
 
     }
 
-    class World {
-        public int Width { get; }
-        public int Height { get; }
-        public int Offset { get; private set; }
-        public Player Player { get; private set; }
-        private readonly List<Platform> platforms;
-        private readonly Random rand;
-        private float manualBoostCooldown = 0f;
-        internal List<Platform> Platforms { get { return platforms; } }
-        internal const float JumpVelocity = 3.2f;
-        public float MaxAltitude { get; private set; }
-        public int LevelsCompleted { get; private set; }
-        public const int GoalPlatforms = 256;
-        public bool LandedThisFrame { get; private set; }
-        public bool BorderHitThisFrame { get; private set; }
-        private const float ManualBoostCooldownSeconds = 0.75f;
-        private const float GroundHorizontalUnitsPerSecond = 15f;
-        private const float AirHorizontalSpeedMultiplier = 1.3f;
-        private const float FastDropImpulse = -6f;
-        private const int MaxPlatformWidthDivisor = 3;
-        private const int MinPlatformLength = 4; // Minimum platform length to ensure playability
-        internal int MaxPlatformLength => Math.Min(Width, Math.Max(MinPlatformLength, Width / MaxPlatformWidthDivisor));
-        private const int WidthDivisorForMaxPlatform = 3;
-
-        public World(int width, int height) {
-            Width = width;
-            Height = height;
-            platforms = new List<Platform>();
-            rand = new Random();
-            Player = new Player(width / 2, 0);
-            Reset();
-        }
-
-        public void Reset() {
-            ResetPlayer();
-            platforms.Clear();
-            Offset = 0;
-            manualBoostCooldown = 0f;
-            MaxAltitude = 0f;
-            LevelsCompleted = 0;
-
-            int firstY = 8;
-            int firstLength = GetRandomPlatformLength();
-            int firstStart = Math.Clamp((int)MathF.Round(Player.X) - firstLength / 2, 0, Math.Max(0, Width - firstLength));
-            platforms.Add(new Platform(firstStart, firstY, firstLength));
-
-            int secondY = firstY + 7;
-            int secondLength = GetRandomPlatformLength();
-            int secondMaxStart = Math.Max(0, Width - secondLength);
-            int secondX = rand.Next(secondMaxStart + 1);
-            platforms.Add(new Platform(secondX, secondY, secondLength));
-        }
-
-        private int GetRandomPlatformLength() {
-            int maxLength = MaxPlatformLength;
-            return rand.Next(MinPlatformLength, maxLength + 1);
-        }
-
-        public void Update(float deltaSeconds, int horizontalDirection, bool fastDropRequested) {
-            LandedThisFrame = false;
-            BorderHitThisFrame = false;
-            manualBoostCooldown = MathF.Max(0f, manualBoostCooldown - deltaSeconds);
-            float stepScale = deltaSeconds / Game.FrameTimeSeconds;
-
-            float horizontalMax = Math.Max(0, Width - 1);
-            float newX = Player.X;
-            if (horizontalDirection != 0) {
-                float horizontalSpeed = GroundHorizontalUnitsPerSecond;
-                bool isAirborne = MathF.Abs(Player.VelocityY) > 0.05f;
-                if (isAirborne) {
-                    horizontalSpeed *= AirHorizontalSpeedMultiplier;
-                }
-                newX += horizontalDirection * horizontalSpeed * deltaSeconds;
-            }
-            float clampedX = Math.Clamp(newX, 0f, horizontalMax);
-            BorderHitThisFrame = MathF.Abs(clampedX - newX) > float.Epsilon;
-            Player.X = clampedX;
-
-            if (fastDropRequested) {
-                Player.VelocityY += FastDropImpulse;
-            }
-
-            Player.VelocityY += Game.GravityPerSecond * deltaSeconds;
-            float oldY = Player.Y;
-            float newY = oldY + Player.VelocityY * stepScale;
-
-            if (Player.VelocityY < 0) {
-                Platform? collidePlatform = null;
-                int playerColumn = Math.Clamp((int)MathF.Round(Player.X), 0, Math.Max(0, Width - 1));
-                foreach (Platform platform in platforms) {
-                    int platformStart = (int)MathF.Round(platform.X);
-                    int platformEnd = platformStart + platform.Length - 1;
-                    if (playerColumn >= platformStart && playerColumn <= platformEnd && platform.Y <= oldY && platform.Y >= newY) {
-                        collidePlatform = platform;
-                        break;
-                    }
-                }
-                if (collidePlatform != null) {
-                    newY = collidePlatform.Y;
-                    Player.VelocityY = World.JumpVelocity;
-                    manualBoostCooldown = ManualBoostCooldownSeconds;
-                    LandedThisFrame = true;
-                    LevelsCompleted++;
-                }
-            }
-
-            Player.Y = newY;
-            if (Player.Y > MaxAltitude) {
-                MaxAltitude = Player.Y;
-            }
-
-            int threshold = Height / 2;
-            if (Player.Y > threshold) {
-                Offset = (int)(Player.Y - threshold);
-            }
-            platforms.RemoveAll(p => p.Y < Offset);
-        }
-
-        public bool TryManualBoost() {
-            if (manualBoostCooldown > 0f) return false;
-            Player.VelocityY = World.JumpVelocity;
-            manualBoostCooldown = ManualBoostCooldownSeconds;
-            return true;
-        }
-
-        private void ResetPlayer() {
-            Player ??= new Player(Width / 2, 0);
-            Player.X = Width / 2f;
-            Player.Y = 0f;
-            Player.VelocityY = 0f;
-        }
-
-        public IEnumerable<Entity> Entities {
-            get {
-                yield return Player;
-                foreach (Platform p in platforms) yield return p;
-            }
-        }
-    }
 }

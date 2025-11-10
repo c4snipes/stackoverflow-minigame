@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace stackoverflow_minigame {
@@ -27,16 +28,21 @@ namespace stackoverflow_minigame {
         private readonly object sync = new();
         private readonly JsonSerializerOptions jsonOptions = new() {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = false
+            WriteIndented = false,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
 
         public Scoreboard(string filePath) {
             this.filePath = filePath;
             EnsureFileExists();
-            SyncWithDisk();
+            entries.AddRange(ReadEntriesFromDisk());
         }
 
         public static string ResolveDefaultPath() {
+            string? overridePath = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD");
+            if (!string.IsNullOrWhiteSpace(overridePath)) {
+                return Path.GetFullPath(overridePath);
+            }
             string baseDir = AppContext.BaseDirectory ?? Directory.GetCurrentDirectory();
             string currentDir = Directory.GetCurrentDirectory();
 
@@ -69,16 +75,23 @@ namespace stackoverflow_minigame {
                 TimestampUtc = DateTime.UtcNow
             };
 
+            RecordRun(entry);
+        }
+
+        public void RecordRun(ScoreEntry entry) {
+            if (entry == null) throw new ArgumentNullException(nameof(entry));
             lock (sync) {
-                SyncWithDisk();
-                entries.Add(entry);
                 AppendEntry(entry);
+                entries.Clear();
+                entries.AddRange(ReadEntriesFromDisk());
             }
         }
 
         public IReadOnlyList<ScoreEntry> GetTopScores(int count) {
+            List<ScoreEntry> fresh = ReadEntriesFromDisk();
             lock (sync) {
-                SyncWithDisk();
+                entries.Clear();
+                entries.AddRange(fresh);
                 return entries
                     .OrderByDescending(e => e.Score)
                     .ThenBy(e => e.RunTimeTicks)
@@ -89,8 +102,10 @@ namespace stackoverflow_minigame {
         }
 
         public IReadOnlyList<ScoreEntry> GetFastestRuns(int count) {
+            List<ScoreEntry> fresh = ReadEntriesFromDisk();
             lock (sync) {
-                SyncWithDisk();
+                entries.Clear();
+                entries.AddRange(fresh);
                 return entries
                     .Where(e => e.RunTimeTicks > 0)
                     .OrderBy(e => e.RunTimeTicks)
@@ -118,23 +133,19 @@ namespace stackoverflow_minigame {
             writer.WriteLine(payload);
         }
 
-        private void SyncWithDisk() {
-            if (!File.Exists(filePath)) {
-                EnsureFileExists();
-                return;
-            }
-
+        private List<ScoreEntry> ReadEntriesFromDisk() {
+            EnsureFileExists();
             string[] rawLines = File.ReadAllLines(filePath);
-            Dictionary<string, ScoreEntry> merged = entries.ToDictionary(e => e.Id, e => e);
+            Dictionary<string, ScoreEntry> merged = new();
 
-            foreach (string line in ExpandConflictLines(rawLines)) {
+            foreach (string line in rawLines) {
+                if (IsConflictMarker(line)) continue;
                 ScoreEntry? parsed = ParseLine(line);
                 if (parsed == null || string.IsNullOrWhiteSpace(parsed.Id)) continue;
                 merged[parsed.Id] = parsed;
             }
 
-            entries.Clear();
-            entries.AddRange(merged.Values);
+            return merged.Values.ToList();
         }
 
         private ScoreEntry? ParseLine(string line) {
@@ -147,46 +158,21 @@ namespace stackoverflow_minigame {
                 return JsonSerializer.Deserialize<ScoreEntry>(trimmed, jsonOptions);
             } catch (JsonException ex) {
                 Diagnostics.ReportFailure("Failed to parse scoreboard entry.", ex);
+                LogCorruptLine(line);
                 return null;
             }
         }
 
-        private static IEnumerable<string> ExpandConflictLines(IReadOnlyList<string> lines) {
-            int i = 0;
-            while (i < lines.Count) {
-                string line = lines[i];
-                if (line.StartsWith("<<<<<<<")) {
-                    i++;
-                    List<string> head = new();
-                    while (i < lines.Count && !lines[i].StartsWith("=======")) {
-                        head.Add(lines[i]);
-                        i++;
-                    }
+        private static bool IsConflictMarker(string line) =>
+            line.StartsWith("<<<<<<<") || line.StartsWith("=======") || line.StartsWith(">>>>>>>");
 
-                    List<string> incoming = new();
-                    if (i < lines.Count && lines[i].StartsWith("=======")) {
-                        i++;
-                        while (i < lines.Count && !lines[i].StartsWith(">>>>>>>")) {
-                            incoming.Add(lines[i]);
-                            i++;
-                        }
-                    }
-
-                    foreach (string h in head) yield return h;
-                    foreach (string inc in incoming) yield return inc;
-
-                    while (i < lines.Count && !lines[i].StartsWith(">>>>>>>")) {
-                        i++;
-                    }
-                    if (i < lines.Count && lines[i].StartsWith(">>>>>>>")) {
-                        i++;
-                    }
-                } else if (line.StartsWith("=======") || line.StartsWith(">>>>>>>")) {
-                    i++;
-                } else {
-                    yield return line;
-                    i++;
-                }
+        private void LogCorruptLine(string line) {
+            try {
+                string corruptPath = filePath + ".corrupt";
+                using StreamWriter writer = new(corruptPath, append: true, Encoding.UTF8);
+                writer.WriteLine(line);
+            } catch (IOException ex) {
+                Diagnostics.ReportFailure("Failed to log corrupt scoreboard entry.", ex);
             }
         }
 

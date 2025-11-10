@@ -33,16 +33,16 @@ namespace stackoverflow_minigame {
         }
 
         public void Stop() {
+            Thread? thread = listener;
             try {
                 cancellation.Cancel();
             } catch (ObjectDisposedException) {
                 // Already disposed, ignore.
             }
-            if (listener != null && listener.IsAlive) {
-                // Attempt graceful shutdown, but if the thread is blocked on Console.ReadKey(), it may not exit promptly.
-                // Since the thread is a background thread, it will be terminated when the process exits.
-                // Removed listener.Join() to avoid unnecessary delay; thread will exit when process ends.
-                // If still alive, accept that it may not terminate gracefully due to Console.ReadKey() being blocking.
+            if (thread != null && thread.IsAlive) {
+                if (!thread.Join(LISTENER_SHUTDOWN_TIMEOUT_MS)) {
+                    Diagnostics.ReportFailure("Input listener did not shut down within the timeout.");
+                }
             }
             listener = null;
         }
@@ -118,17 +118,17 @@ namespace stackoverflow_minigame {
         public void BeginFrame(World world) {
             frameReady = false;
             int consoleWidth = ConsoleSafe.GetBufferWidth(world.Width + BorderThickness * 2);
-            int consoleHeight = ConsoleSafe.GetBufferHeight(world.Height + HudRows + BorderThickness);
+            int consoleHeight = ConsoleSafe.GetBufferHeight(world.Height + HudRows + BorderThickness * 2);
             interiorWidth = world.Width;
             frameWidth = Math.Max(0, interiorWidth) + BorderThickness * 2;
 
-            int availableWorldHeight = Math.Max(0, consoleHeight - HudRows - BorderThickness);
+            int availableWorldHeight = Math.Max(0, consoleHeight - HudRows - BorderThickness * 2);
             worldRenderHeight = Math.Min(world.Height, availableWorldHeight);
-            frameHeight = HudRows + BorderThickness + worldRenderHeight;
+            frameHeight = HudRows + BorderThickness * 2 + worldRenderHeight;
 
             interiorLeft = BorderThickness;
             interiorRight = interiorLeft + Math.Max(0, interiorWidth - 1);
-            interiorTopRow = HudRows;
+            interiorTopRow = HudRows + BorderThickness;
             interiorBottomRow = interiorTopRow + Math.Max(0, worldRenderHeight - 1);
 
             EnsureBufferSize();
@@ -279,15 +279,15 @@ namespace stackoverflow_minigame {
         private void DrawBorders() {
             if (frameBuffer.Length == 0 || frameWidth <= 0) return;
 
-            int topBorderStartRow = HudRows;
+            int playfieldTop = HudRows;
             int bottomBorderStartRow = frameHeight - BorderThickness;
 
-            // Only draw bottom border horizontally
             for (int row = 0; row < BorderThickness; row++) {
+                DrawHorizontalBorderRow(playfieldTop + row);
                 DrawHorizontalBorderRow(bottomBorderStartRow + row);
             }
 
-            for (int row = topBorderStartRow; row < bottomBorderStartRow; row++) {
+            for (int row = playfieldTop + BorderThickness; row < bottomBorderStartRow; row++) {
                 DrawVerticalBorderColumns(row);
             }
         }
@@ -414,21 +414,22 @@ namespace stackoverflow_minigame {
             if (BandHasOverlap(world, y, start, length)) {
                 return false;
             }
-            world.Platforms.Add(new Platform(start, y, length));
+            world.Platforms.Add(new Platform(start, y, length, world.Width));
             return true;
         }
 
         private void ForceSpawnPlatform(World world, float y) {
             int length = GeneratePlatformLength(world);
             int start = GetPlatformStart(world, length);
-            world.Platforms.Add(new Platform(start, y, length));
+            world.Platforms.Add(new Platform(start, y, length, world.Width));
         }
 
         private int GeneratePlatformLength(World world) {
-            // Derive bounds from world width to avoid accessing non-public members.
-            int min = Math.Max(1, Math.Min(3, world.Width));
-            int max = Math.Max(min, Math.Min(world.Width, Math.Max(6, world.Width / 3)));
-            return rand.Next(min, max + 1);
+            int interiorWidth = Math.Max(1, world.Width - Renderer.BorderThickness * 2);
+            int maxLength = Math.Max(World.MinPlatformLength, interiorWidth / 3);
+            int minLength = World.MinPlatformLength;
+            maxLength = Math.Max(minLength, maxLength);
+            return rand.Next(minLength, maxLength + 1);
         }
 
         private bool BandHasOverlap(World world, float y, int start, int length) {
