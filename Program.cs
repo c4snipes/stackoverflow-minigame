@@ -3,25 +3,44 @@ using System;
 namespace stackoverflow_minigame {
     class Program {
         private const string LeaderboardArg = "leaderboard";
+        private const string DiagnosticsArg = "trace";
         private static bool diagnosticsHooked;
 
         static void Main(string[] args) {
-            var parsedArgs = NormalizeArgs(args);
-            if (parsedArgs.Contains(LeaderboardArg)) {
+            var parsedArgs = NormalizeArgs(args, out var unknownArgs, out bool sufferedParseError);
+            if (sufferedParseError || unknownArgs.Count > 0) {
+                if (unknownArgs.Count > 0) {
+                    Console.WriteLine($"Unknown options: {string.Join(", ", unknownArgs)}");
+                }
+                PrintUsage();
+                Environment.ExitCode = 1;
+                return;
+            }
+            bool enableDiagnostics = parsedArgs.Remove(DiagnosticsArg);
+
+            if (parsedArgs.Remove(LeaderboardArg)) {
+                if (enableDiagnostics) {
+                    Diagnostics.ReportWarning("Trace mode is not supported for the leaderboard viewer; the argument was ignored.");
+                }
                 LeaderboardViewer viewer = new LeaderboardViewer();
                 viewer.Run();
                 return;
             }
 
-            if (parsedArgs.Count > 0) {
-                PrintUsage();
-                return;
-            }
-
             Console.WriteLine("Tip: Run 'dotnet run -- leaderboard' or './launch-leaderboard.sh' in another tab to view live standings.\n");
             Game game = new Game();
-            HookDiagnostics(game);
-            game.Run();
+            if (enableDiagnostics) {
+                Console.WriteLine("[trace] Diagnostics tracing enabled.");
+                HookDiagnostics(game);
+            }
+            GlyphLibrary.ReportStatus();
+
+            try {
+                game.Run();
+            } finally {
+                Tracing.Dispose();
+                // No cleanup needed for diagnosticsHooked here.
+            }
         }
 
         private static void HookDiagnostics(Game game) {
@@ -35,19 +54,27 @@ namespace stackoverflow_minigame {
             game.InitialsCanceled += () => Diagnostics.ReportInfo("Initials prompt canceled.");
             game.InitialsFallbackUsed += fallback => Diagnostics.ReportWarning($"Initials fallback used: {fallback}");
 
-            GlyphLibrary.GlyphLookupStarted += ch => Diagnostics.ReportInfo($"Glyph lookup started: {ch}");
-            GlyphLibrary.GlyphLookupSucceeded += (ch, glyph) => Diagnostics.ReportInfo($"Glyph lookup succeeded: {ch}");
             GlyphLibrary.GlyphLookupFallback += ch => Diagnostics.ReportWarning($"Glyph lookup fallback for: {ch}");
         }
 
-        private static HashSet<string> NormalizeArgs(string[] args) {
+        private static HashSet<string> NormalizeArgs(string[] args, out List<string> unknown, out bool parseError) {
             HashSet<string> normalized = new(StringComparer.OrdinalIgnoreCase);
+            unknown = new List<string>();
+            parseError = false;
             foreach (string raw in args) {
                 if (string.IsNullOrWhiteSpace(raw)) continue;
-                string trimmed = raw.Trim();
-                trimmed = trimmed.TrimStart('-');
-                if (!string.IsNullOrEmpty(trimmed)) {
+                string trimmed = raw.Trim().TrimStart('-');
+                if (string.IsNullOrEmpty(trimmed)) continue;
+                if (trimmed.Contains('=')) {
+                    parseError = true;
+                    Console.WriteLine($"Unsupported option syntax: '{raw}'. Use space-delimited flags (e.g., --trace).");
+                    continue;
+                }
+                if (trimmed.Equals(LeaderboardArg, StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals(DiagnosticsArg, StringComparison.OrdinalIgnoreCase)) {
                     normalized.Add(trimmed);
+                } else {
+                    unknown.Add(trimmed);
                 }
             }
             return normalized;
@@ -57,7 +84,7 @@ namespace stackoverflow_minigame {
             Console.WriteLine("Usage:");
             Console.WriteLine("  dotnet run              # run the game");
             Console.WriteLine("  dotnet run -- leaderboard | ./launch-leaderboard.sh");
-            Console.WriteLine("                          # view the live leaderboard in this tab");
+            Console.WriteLine("  dotnet run -- trace     # enable verbose diagnostics for initials/glyphs");
         }
     }
 }

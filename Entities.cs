@@ -2,8 +2,8 @@ using System;
 
 namespace stackoverflow_minigame {
     abstract class Entity {
-        public float X { get; set; }
-        public float Y { get; set; }
+        public float X { get; protected internal set; }
+        public float Y { get; protected internal set; }
         public abstract char Symbol { get; }
         public virtual void Update() { }
     }
@@ -20,15 +20,28 @@ namespace stackoverflow_minigame {
     }
 
     class Platform : Entity {
-        public override char Symbol => '=';
-        public int Length { get; }
+        private static readonly Stack<Platform> Pool = new();
 
-        public Platform(int x, float y, int length, int interiorWidth) {
-            int clampedLength = Math.Max(1, length);
-            clampedLength = Math.Min(clampedLength, Math.Max(1, interiorWidth));
+        public override char Symbol => '=';
+        public int Length { get; private set; }
+
+        private Platform() { }
+
+        public static Platform Acquire(int x, float y, int length, int interiorWidth) {
+            Platform platform = Pool.Count > 0 ? Pool.Pop() : new Platform();
+            platform.Initialize(x, y, length, interiorWidth);
+            return platform;
+        }
+
+        public static void Release(Platform platform) {
+            Pool.Push(platform);
+        }
+
+        private void Initialize(int x, float y, int length, int interiorWidth) {
+            int clampedLength = Math.Max(1, Math.Min(length, Math.Max(1, interiorWidth)));
+            Length = clampedLength;
             X = Math.Clamp(x, 0, Math.Max(0, interiorWidth - clampedLength));
             Y = y;
-            Length = clampedLength;
         }
     }
 }

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading;
+using System.Security;
 
 namespace stackoverflow_minigame {
     enum GameState { Menu, Running, Over }
@@ -51,6 +52,9 @@ namespace stackoverflow_minigame {
         private const float DangerZoneThreshold = 3f;
         private const int BigGlyphHeight = GlyphLibrary.GlyphHeight;
 
+        private static readonly Dictionary<string, string[]> InitialsGlyphCache = new(StringComparer.Ordinal);
+        [ThreadStatic] private static StringBuilder? GlyphLineBuilder;
+
         private static void DefaultFailureLogger(string message) {
             try {
                 Console.Error.WriteLine($"[Diagnostics] {message}");
@@ -70,25 +74,48 @@ namespace stackoverflow_minigame {
         }
 
         public void Run() {
-            Console.CursorVisible = false;
+            bool cursorHidden = false;
+            try {
+                Console.CursorVisible = false;
+                cursorHidden = true;
+            } catch (IOException ex) {
+                Diagnostics.ReportFailure("Failed to hide cursor.", ex);
+            } catch (SecurityException ex) {
+                Diagnostics.ReportFailure("Insufficient permissions to hide cursor.", ex);
+            }
+
             input.Start();
             try {
                 while (running) {
-                    switch (state) {
-                        case GameState.Menu:
-                            MenuLoop();
-                            break;
-                        case GameState.Running:
-                            GameLoop();
-                            break;
-                        case GameState.Over:
-                            OverLoop();
-                            break;
+                    try {
+                        switch (state) {
+                            case GameState.Menu:
+                                MenuLoop();
+                                break;
+                            case GameState.Running:
+                                GameLoop();
+                                break;
+                            case GameState.Over:
+                                OverLoop();
+                                break;
+                        }
+                    } catch (IOException ex) {
+                        Diagnostics.ReportFailure("Console IO error during game loop.", ex);
+                        running = false;
+                    } catch (SecurityException ex) {
+                        Diagnostics.ReportFailure("Console permission error during game loop.", ex);
+                        running = false;
                     }
                 }
             } finally {
                 input.Dispose();
-                Console.CursorVisible = true;
+                if (cursorHidden) {
+                    try {
+                        Console.CursorVisible = true;
+                    } catch {
+                        // ignore cursor restore failures
+                    }
+                }
             }
         }
 
@@ -166,17 +193,27 @@ namespace stackoverflow_minigame {
             Console.Clear();
             InitialsPromptStarted?.Invoke();
             WriteArcadePrompt(out int artTopRow, out int promptRow);
-            RenderInitialsArt(current, maxChars, artTopRow, blinkOn: false);
+            bool lastBlink = false;
+            string lastRendered = string.Empty;
+            bool lastRenderSucceeded = false;
 
-            while (true) {
-                bool blinkOn = (Environment.TickCount / 500 % 2) == 0;
-                char blinkChar = blinkOn ? '_' : ' ';
-                string display = current.PadRight(maxChars, blinkChar);
-                Console.SetCursorPosition(0, promptRow);
-                Console.Write(new string(' ', Math.Max(0, Console.BufferWidth - 1)));
-                Console.SetCursorPosition(0, promptRow);
-                Console.Write($"INITIALS: {display}");
-                RenderInitialsArt(current, maxChars, artTopRow, blinkOn);
+            void InvalidateRender() {
+                lastRendered = string.Empty;
+                lastBlink = false;
+                lastRenderSucceeded = false;
+            }
+
+            void RefreshPrompt(bool forceBlink) {
+                bool effectiveBlink = forceBlink ? true : (Environment.TickCount / 500 % 2) == 0;
+                if (lastRenderSucceeded && lastBlink == effectiveBlink && lastRendered == current) return;
+                WriteInitialsLine(current, maxChars, promptRow, effectiveBlink);
+                lastRenderSucceeded = TryRenderInitialsArt(current, maxChars, artTopRow, effectiveBlink);
+                lastBlink = effectiveBlink;
+                lastRendered = current;
+            }
+
+            while (running) {
+                RefreshPrompt(forceBlink: false);
 
                 ConsoleKeyInfo keyInfo;
                 try {
@@ -189,10 +226,25 @@ namespace stackoverflow_minigame {
                     initials = playerInitials;
                     InitialsFallbackUsed?.Invoke(playerInitials);
                     return true;
+                } catch (IOException ex) {
+                    Diagnostics.ReportFailure("Initials prompt failed due to IO error; using previous initials.", ex);
+                    initials = playerInitials;
+                    InitialsFallbackUsed?.Invoke(playerInitials);
+                    return true;
+                } catch (SecurityException ex) {
+                    Diagnostics.ReportFailure("Initials prompt cannot read keys due to permissions; using previous initials.", ex);
+                    initials = playerInitials;
+                    InitialsFallbackUsed?.Invoke(playerInitials);
+                    return true;
                 }
 
                 if (keyInfo.Key == ConsoleKey.Escape) {
                     InitialsCanceled?.Invoke();
+                    return false;
+                }
+
+                if (keyInfo.Key == ConsoleKey.Q && keyInfo.Modifiers == ConsoleModifiers.Control) {
+                    running = false;
                     return false;
                 }
 
@@ -201,6 +253,8 @@ namespace stackoverflow_minigame {
                     while (current.Length < maxChars) current += '_';
                     initials = current.ToUpperInvariant();
                     InitialsCommitted?.Invoke(initials);
+                    InvalidateRender();
+                    RefreshPrompt(forceBlink: true);
                     return true;
                 }
 
@@ -209,13 +263,8 @@ namespace stackoverflow_minigame {
                     continue;
                 }
 
-                if (keyInfo.KeyChar == '\0') {
-                    continue;
-                }
-
-                char ch = char.ToUpperInvariant(keyInfo.KeyChar);
-                if (!char.IsLetterOrDigit(ch)) {
-                    InitialsCharRejected?.Invoke(ch);
+                if (!TryNormalizeInitialChar(keyInfo, out char ch)) {
+                    InitialsCharRejected?.Invoke(keyInfo.KeyChar);
                     continue;
                 }
                 if (current.Length >= maxChars) {
@@ -225,7 +274,12 @@ namespace stackoverflow_minigame {
 
                 current += ch;
                 InitialsCharAccepted?.Invoke(ch);
+                InvalidateRender();
             }
+
+            initials = playerInitials;
+            InitialsFallbackUsed?.Invoke(playerInitials);
+            return false;
         }
 
         private static void WriteArcadePrompt(out int artTopRow, out int promptRow) {
@@ -237,7 +291,7 @@ namespace stackoverflow_minigame {
                 Console.WriteLine("========================================");
                 Console.WriteLine();
                 Console.WriteLine("ENTER YOUR INITIALS");
-                Console.WriteLine("LETTERS & NUMBERS ONLY (3 CHARACTERS, ESC TO CANCEL)");
+                Console.WriteLine("UPPERCASE LETTERS & NUMBERS ONLY (3 CHARACTERS, ESC TO CANCEL)");
                 Console.WriteLine();
                 artTopRow = Console.CursorTop;
                 for (int i = 0; i < BigGlyphHeight; i++) {
@@ -251,25 +305,90 @@ namespace stackoverflow_minigame {
         }
 
         // Redraws the oversized ASCII glyphs for the initials entry banner each frame.
-        private static void RenderInitialsArt(string current, int maxChars, int topRow, bool blinkOn) {
+        private static bool TryRenderInitialsArt(string current, int maxChars, int topRow, bool blinkOn) {
             if (current.Length > maxChars) {
                 current = current[..maxChars];
             }
 
-            char placeholder = blinkOn ? '_' : ' ';
-            string padded = current.PadRight(maxChars, placeholder);
-            for (int row = 0; row < BigGlyphHeight; row++) {
-                Console.SetCursorPosition(0, topRow + row);
-                StringBuilder builder = new();
-                foreach (char ch in padded) {
-                    var glyph = GlyphLibrary.GetGlyph(ch);
-                    builder.Append(glyph[row]).Append(' ');
+            string padded = current.PadRight(maxChars, blinkOn ? '_' : ' ');
+            string[] composedRows = GetInitialsGlyphRows(padded);
+            try {
+                for (int row = 0; row < BigGlyphHeight; row++) {
+                    if (!ConsoleSafe.TrySetCursorPosition(0, topRow + row)) {
+                        continue;
+                    }
+                    string line = composedRows[row];
+                    int width = Console.BufferWidth > 0 ? Console.BufferWidth - 1 : line.Length;
+                    if (line.Length < width) line = line.PadRight(width);
+                    Console.Write(line.Length > width ? line[..width] : line);
                 }
-                string line = builder.ToString();
-                int width = Console.BufferWidth > 0 ? Console.BufferWidth - 1 : line.Length;
-                if (line.Length < width) line = line.PadRight(width);
-                Console.Write(line.Length > width ? line[..width] : line);
+                return true;
+            } catch (IOException ex) {
+                Diagnostics.ReportFailure("Failed to render initials art due to IO error.", ex);
+                return false;
+            } catch (ArgumentException ex) {
+                Diagnostics.ReportFailure("Failed to render initials art due to argument error.", ex);
+                return false;
             }
+        }
+
+        private static string[] GetInitialsGlyphRows(string padded) {
+            if (InitialsGlyphCache.TryGetValue(padded, out var cached)) {
+                return cached;
+            }
+
+            string[][] glyphRows = new string[padded.Length][];
+            for (int i = 0; i < padded.Length; i++) {
+                glyphRows[i] = GlyphLibrary.GetGlyph(padded[i]);
+            }
+
+            string[] composed = new string[BigGlyphHeight];
+            for (int row = 0; row < BigGlyphHeight; row++) {
+                var builder = GlyphLineBuilder ??= new StringBuilder(64);
+                builder.Clear();
+                for (int i = 0; i < glyphRows.Length; i++) {
+                    builder.Append(glyphRows[i][row]).Append(' ');
+                }
+                composed[row] = builder.ToString();
+            }
+
+            InitialsGlyphCache[padded] = composed;
+            return composed;
+        }
+
+        private static void WriteInitialsLine(string current, int maxChars, int row, bool blinkOn) {
+            string display = current.PadRight(maxChars, blinkOn ? '_' : ' ');
+            if (!ConsoleSafe.TrySetCursorPosition(0, row)) return;
+            Console.Write(new string(' ', Math.Max(0, Console.BufferWidth - 1)));
+            if (!ConsoleSafe.TrySetCursorPosition(0, row)) return;
+            Console.Write($"INITIALS: {display}");
+        }
+
+        // Attempts to coerce the user's keypress into an uppercase alphanumeric character regardless of keyboard state.
+        private static bool TryNormalizeInitialChar(ConsoleKeyInfo keyInfo, out char normalized) {
+            char raw = keyInfo.KeyChar;
+            if (!char.IsControl(raw) && char.IsLetterOrDigit(raw)) {
+                normalized = char.ToUpperInvariant(raw);
+                return true;
+            }
+
+            if (keyInfo.Key >= ConsoleKey.A && keyInfo.Key <= ConsoleKey.Z) {
+                normalized = (char)('A' + (keyInfo.Key - ConsoleKey.A));
+                return true;
+            }
+
+            if (keyInfo.Key >= ConsoleKey.D0 && keyInfo.Key <= ConsoleKey.D9) {
+                normalized = (char)('0' + (keyInfo.Key - ConsoleKey.D0));
+                return true;
+            }
+
+            if (keyInfo.Key >= ConsoleKey.NumPad0 && keyInfo.Key <= ConsoleKey.NumPad9) {
+                normalized = (char)('0' + (keyInfo.Key - ConsoleKey.NumPad0));
+                return true;
+            }
+
+            normalized = default;
+            return false;
         }
 
         // Core gameplay loop: process input, advance world state, render, and keep a stable frame cadence.
@@ -319,15 +438,15 @@ namespace stackoverflow_minigame {
             Console.WriteLine(playerWon ? "YOU CLEARED THE ERROR STACK!" : "*** STACKOVERFLOW EXCEPTION ***");
             Console.WriteLine($"Score (landings): {framesClimbed}");
             Console.WriteLine($"Best run: {bestFrames}");
-            Console.WriteLine($"Run time: {FormatTimeSpan(runStopwatch.Elapsed)}");
+            Console.WriteLine($"Run time: {TimeFormatting.FormatDuration(runStopwatch.Elapsed)}");
             Console.WriteLine($"Player: {playerInitials}");
             Console.WriteLine();
             Console.WriteLine("Top Levels:");
             var topScores = scoreboard.GetTopScores(3);
-            WriteScoreboard(topScores, entry => $"{entry.Initials} - {entry.Score} lvls ({FormatTimeSpan(entry.RunTime)})");
+            WriteScoreboard(topScores, entry => $"{entry.Initials} - {entry.Score} lvls ({TimeFormatting.FormatDuration(entry.RunTime)})");
             Console.WriteLine("Fastest Runs:");
             var fastestRuns = scoreboard.GetFastestRuns(3);
-            WriteScoreboard(fastestRuns, entry => $"{entry.Initials} - {FormatTimeSpan(entry.RunTime)} ({entry.Score} lvls)");
+            WriteScoreboard(fastestRuns, entry => $"{entry.Initials} - {TimeFormatting.FormatDuration(entry.RunTime)} ({entry.Score} lvls)");
             Console.WriteLine("Press R to restart or Q/Esc to quit.");
             input.ClearBuffer();
 
@@ -411,12 +530,6 @@ namespace stackoverflow_minigame {
             bestFrames = Math.Max(bestFrames, framesClimbed);
         }
 
-        private static string FormatTimeSpan(TimeSpan span) {
-            if (span <= TimeSpan.Zero) return "--:--";
-            string format = span.TotalHours >= 1 ? @"hh\:mm\:ss" : @"mm\:ss\.ff";
-            return span.ToString(format);
-        }
-
         private static void WriteScoreboard(IReadOnlyList<ScoreEntry> entries, Func<ScoreEntry, string> formatter) {
             if (entries.Count == 0) {
                 Console.WriteLine("  (no records yet)");
@@ -471,7 +584,7 @@ namespace stackoverflow_minigame {
             int currentHeight = GetRoundedAltitude(world.Player.Y);
             int maxHeight = GetRoundedAltitude(world.MaxAltitude);
             int displayedBest = Math.Max(bestFrames, framesClimbed);
-            string timeText = FormatTimeSpan(runStopwatch.Elapsed);
+            string timeText = TimeFormatting.FormatDuration(runStopwatch.Elapsed);
             float distanceFromBottom = world.Player.Y - world.Offset;
             ConsoleColor statsColor = distanceFromBottom < DangerZoneThreshold ? ConsoleColor.Red : ConsoleColor.Gray;
 
@@ -512,7 +625,9 @@ namespace stackoverflow_minigame {
                 return;
             }
 
-            string output = text.Length > consoleWidth ? text[..consoleWidth] : text.PadRight(consoleWidth);
+            string output = text.Length > consoleWidth
+                ? text[..consoleWidth]
+                : text.PadRight(consoleWidth);
             if (!ConsoleSafe.TrySetCursorPosition(0, row)) return;
             ConsoleColor originalColor = Console.ForegroundColor;
             if (color.HasValue) {

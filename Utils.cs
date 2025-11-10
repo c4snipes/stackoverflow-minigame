@@ -54,13 +54,19 @@ namespace stackoverflow_minigame {
         }
 
         private void Listen() {
-            while (!cancellation.IsCancellationRequested) {
+            var token = cancellation.Token;
+            while (!token.IsCancellationRequested) {
                 try {
                     if (Console.KeyAvailable) {
+                        if (token.IsCancellationRequested) {
+                            break;
+                        }
                         var key = Console.ReadKey(intercept: true);
                         buffer.Enqueue(key);
                     } else {
-                        Thread.Sleep(2);
+                        if (token.WaitHandle.WaitOne(2)) {
+                            break;
+                        }
                     }
                 } catch (InvalidOperationException ex) {
                     Diagnostics.ReportFailure("Console input became unavailable while listening.", ex);
@@ -409,19 +415,24 @@ namespace stackoverflow_minigame {
         }
 
         private bool TrySpawnPlatform(World world, float y) {
-            int length = GeneratePlatformLength(world);
-            int start = GetPlatformStart(world, length);
+            var (platform, start, length) = CreatePlatform(world, y);
             if (BandHasOverlap(world, y, start, length)) {
                 return false;
             }
-            world.Platforms.Add(new Platform(start, y, length, world.Width));
+            world.Platforms.Add(platform);
             return true;
         }
 
         private void ForceSpawnPlatform(World world, float y) {
+            var (platform, _, _) = CreatePlatform(world, y);
+            world.Platforms.Add(platform);
+        }
+
+        private (Platform platform, int start, int length) CreatePlatform(World world, float y) {
             int length = GeneratePlatformLength(world);
             int start = GetPlatformStart(world, length);
-            world.Platforms.Add(new Platform(start, y, length, world.Width));
+            var platform = Platform.Acquire(start, y, length, world.Width);
+            return (platform, start, length);
         }
 
         private int GeneratePlatformLength(World world) {
@@ -465,14 +476,20 @@ namespace stackoverflow_minigame {
     }
 
     static class ConsoleSafe {
+        private static long lastWidthWarningTicks = DateTime.MinValue.Ticks;
+        private static long lastHeightWarningTicks = DateTime.MinValue.Ticks;
+        private const double WarningCooldownSeconds = 2;
+        private static readonly long WarningCooldownTicks = TimeSpan.FromSeconds(WarningCooldownSeconds).Ticks;
+
         public static int GetBufferWidth(int fallback) {
             try {
                 int width = Console.BufferWidth;
                 if (width > 0) return width;
-                Diagnostics.ReportWarning($"Console reported non-positive buffer width ({width}); using fallback {fallback}.");
+                ThrottledWarning(ref lastWidthWarningTicks, $"Console reported non-positive buffer width ({width}); using fallback {fallback}.");
                 return fallback;
             } catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or SecurityException or PlatformNotSupportedException) {
                 Diagnostics.ReportFailure("Failed to read console buffer width.", ex);
+                ThrottledWarning(ref lastWidthWarningTicks, "Failed to read console buffer width. Falling back.");
                 return fallback;
             }
         }
@@ -481,11 +498,24 @@ namespace stackoverflow_minigame {
             try {
                 int height = Console.BufferHeight;
                 if (height > 0) return height;
-                Diagnostics.ReportWarning($"Console reported non-positive buffer height ({height}); using fallback {fallback}.");
+                ThrottledWarning(ref lastHeightWarningTicks, $"Console reported non-positive buffer height ({height}); using fallback {fallback}.");
                 return fallback;
             } catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or SecurityException or PlatformNotSupportedException) {
                 Diagnostics.ReportFailure("Failed to read console buffer height.", ex);
+                ThrottledWarning(ref lastHeightWarningTicks, "Failed to read console buffer height. Falling back.");
                 return fallback;
+            }
+        }
+
+        private static void ThrottledWarning(ref long lastTicks, string message) {
+            long nowTicks = DateTime.UtcNow.Ticks;
+            while (true) {
+                long previous = Interlocked.Read(ref lastTicks);
+                if (nowTicks - previous < WarningCooldownTicks) return;
+                if (Interlocked.CompareExchange(ref lastTicks, nowTicks, previous) == previous) {
+                    Diagnostics.ReportWarning(message);
+                    return;
+                }
             }
         }
 
@@ -504,6 +534,10 @@ namespace stackoverflow_minigame {
             int height = GetBufferHeight(-1);
             if (height >= 0 && top >= height) {
                 Diagnostics.ReportFailure($"Rejected cursor move beyond buffer height (top={top}, height={height}).");
+                return false;
+            }
+
+            if (width < 0 || height < 0) {
                 return false;
             }
 
@@ -527,17 +561,29 @@ namespace stackoverflow_minigame {
             if (ex != null) {
                 prefix = $"{prefix} ({ex.GetType().Name}: {ex.Message})";
             }
-            FailureReported?.Invoke(prefix);
+            if (FailureReported != null) {
+                FailureReported.Invoke(prefix);
+            } else {
+                Tracing.Enqueue(prefix);
+            }
         }
 
         public static void ReportWarning(string message, [CallerMemberName] string? caller = null) {
             string prefix = BuildPrefix(message, caller);
-            WarningReported?.Invoke(prefix);
+            if (WarningReported != null) {
+                WarningReported.Invoke(prefix);
+            } else {
+                Tracing.Enqueue(prefix);
+            }
         }
 
         public static void ReportInfo(string message, [CallerMemberName] string? caller = null) {
             string prefix = BuildPrefix(message, caller);
-            InfoReported?.Invoke(prefix);
+            if (InfoReported != null) {
+                InfoReported.Invoke(prefix);
+            } else {
+                Tracing.Enqueue(prefix);
+            }
         }
 
         private static string BuildPrefix(string message, string? caller) =>

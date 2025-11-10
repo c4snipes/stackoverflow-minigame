@@ -25,6 +25,7 @@ namespace stackoverflow_minigame {
 
         private readonly string filePath;
         private readonly List<ScoreEntry> entries = new();
+        private long lastReadPosition;
         private readonly object sync = new();
         private readonly JsonSerializerOptions jsonOptions = new() {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -35,7 +36,7 @@ namespace stackoverflow_minigame {
         public Scoreboard(string filePath) {
             this.filePath = filePath;
             EnsureFileExists();
-            entries.AddRange(ReadEntriesFromDisk());
+            ReloadAllEntries();
         }
 
         public static string ResolveDefaultPath() {
@@ -81,8 +82,15 @@ namespace stackoverflow_minigame {
         public void RecordRun(ScoreEntry entry) {
             if (entry == null) throw new ArgumentNullException(nameof(entry));
             lock (sync) {
-                AppendEntry(entry);
-                entries.Add(entry.Clone());
+                if (string.IsNullOrWhiteSpace(entry.Id)) {
+                    entry.Id = Guid.NewGuid().ToString("N");
+                } else if (entries.Any(e => e.Id == entry.Id)) {
+                    entry.Id = Guid.NewGuid().ToString("N");
+                }
+                var storedEntry = entry.Clone();
+                if (TryAppendEntry(storedEntry)) {
+                    ApplyEntry(storedEntry);
+                }
             }
         }
 
@@ -121,33 +129,90 @@ namespace stackoverflow_minigame {
             }
         }
 
-        private void AppendEntry(ScoreEntry entry) {
+        private bool TryAppendEntry(ScoreEntry entry) {
             string payload = JsonSerializer.Serialize(entry, jsonOptions);
-            using FileStream stream = new(filePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-            using StreamWriter writer = new(stream, Encoding.UTF8);
-            writer.WriteLine(payload);
+            try {
+                using FileStream stream = new(filePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                using StreamWriter writer = new(stream, Encoding.UTF8);
+                writer.WriteLine(payload);
+                lastReadPosition = stream.Position;
+                return true;
+            } catch (IOException ex) {
+                Diagnostics.ReportFailure("Failed to append scoreboard entry.", ex);
+            } catch (UnauthorizedAccessException ex) {
+                Diagnostics.ReportFailure("Scoreboard file is not writable.", ex);
+            }
+            return false;
         }
 
         private List<ScoreEntry> RefreshEntriesFromDisk() {
-            var fresh = ReadEntriesFromDisk();
-            entries.Clear();
-            entries.AddRange(fresh);
+            ReadIncrementalEntries();
             return entries;
         }
 
-        private List<ScoreEntry> ReadEntriesFromDisk() {
+        private void ReadIncrementalEntries() {
             EnsureFileExists();
-            string[] rawLines = File.ReadAllLines(filePath);
-            Dictionary<string, ScoreEntry> merged = new();
-
-            foreach (string line in rawLines) {
-                if (IsConflictMarker(line)) continue;
-                ScoreEntry? parsed = ParseLine(line);
-                if (parsed == null || string.IsNullOrWhiteSpace(parsed.Id)) continue;
-                merged[parsed.Id] = parsed;
+            FileInfo info = new(filePath);
+            long currentLength = info.Exists ? info.Length : 0;
+            if (currentLength == 0) {
+                entries.Clear();
+                lastReadPosition = 0;
+                return;
             }
 
-            return merged.Values.ToList();
+            if (currentLength < lastReadPosition) {
+                ReloadAllEntries();
+                return;
+            }
+
+            if (currentLength == lastReadPosition) {
+                return;
+            }
+
+            try {
+                using FileStream stream = new(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                stream.Seek(lastReadPosition, SeekOrigin.Begin);
+                using StreamReader reader = new(stream, Encoding.UTF8);
+                string? line;
+                while ((line = reader.ReadLine()) != null) {
+                    if (IsConflictMarker(line)) continue;
+                    ScoreEntry? parsed = ParseLine(line);
+                    if (parsed == null || string.IsNullOrWhiteSpace(parsed.Id)) continue;
+                    ApplyEntry(parsed);
+                }
+                lastReadPosition = stream.Position;
+            } catch (IOException ex) {
+                Diagnostics.ReportFailure("Failed to read incremental scoreboard entries.", ex);
+            } catch (UnauthorizedAccessException ex) {
+                Diagnostics.ReportFailure("Scoreboard file is not readable.", ex);
+            }
+        }
+
+        private void ReloadAllEntries() {
+            entries.Clear();
+            try {
+                foreach (string line in File.ReadLines(filePath)) {
+                    if (IsConflictMarker(line)) continue;
+                    ScoreEntry? parsed = ParseLine(line);
+                    if (parsed == null || string.IsNullOrWhiteSpace(parsed.Id)) continue;
+                    ApplyEntry(parsed);
+                }
+                FileInfo info = new(filePath);
+                lastReadPosition = info.Exists ? info.Length : 0;
+            } catch (IOException ex) {
+                Diagnostics.ReportFailure("Failed to reload scoreboard from disk.", ex);
+            } catch (UnauthorizedAccessException ex) {
+                Diagnostics.ReportFailure("Scoreboard file is not readable.", ex);
+            }
+        }
+
+        private void ApplyEntry(ScoreEntry entry) {
+            int existingIndex = entries.FindIndex(e => e.Id == entry.Id);
+            if (existingIndex >= 0) {
+                entries[existingIndex] = entry;
+            } else {
+                entries.Add(entry);
+            }
         }
 
         private ScoreEntry? ParseLine(string line) {
@@ -178,11 +243,11 @@ namespace stackoverflow_minigame {
             }
         }
 
-        private static string? FindFileUpwards(string start, string fileName) {
+        private static string? WalkUpwards(string start, Func<string, string?> evaluator) {
             string? current = start;
             while (!string.IsNullOrEmpty(current)) {
-                string candidate = Path.Combine(current, fileName);
-                if (File.Exists(candidate)) return candidate;
+                string? result = evaluator(current);
+                if (!string.IsNullOrEmpty(result)) return result;
                 string? parent = Directory.GetParent(current)?.FullName;
                 if (parent == null || parent == current) break;
                 current = parent;
@@ -190,16 +255,16 @@ namespace stackoverflow_minigame {
             return null;
         }
 
-        private static string? FindDirectoryUpwards(string start, string directoryName) {
-            string? current = start;
-            while (!string.IsNullOrEmpty(current)) {
+        private static string? FindFileUpwards(string start, string fileName) =>
+            WalkUpwards(start, current => {
+                string candidate = Path.Combine(current, fileName);
+                return File.Exists(candidate) ? candidate : null;
+            });
+
+        private static string? FindDirectoryUpwards(string start, string directoryName) =>
+            WalkUpwards(start, current => {
                 string candidate = Path.Combine(current, directoryName);
-                if (Directory.Exists(candidate)) return current;
-                string? parent = Directory.GetParent(current)?.FullName;
-                if (parent == null || parent == current) break;
-                current = parent;
-            }
-            return null;
-        }
+                return Directory.Exists(candidate) ? current : null;
+            });
     }
 }

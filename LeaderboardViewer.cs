@@ -7,6 +7,9 @@ namespace stackoverflow_minigame {
         private readonly Scoreboard scoreboard;
         private const int EntriesToDisplay = 8;
         private const int RefreshIntervalMs = 1000;
+        private bool layoutInitialized;
+        private int topSectionRow;
+        private int fastestSectionRow;
 
         public LeaderboardViewer() {
             scoreboard = new Scoreboard(Scoreboard.ResolveDefaultPath());
@@ -20,8 +23,10 @@ namespace stackoverflow_minigame {
             }
             try {
                 do {
-                    Draw();
-                    if (singlePass) break;
+                    bool success = Draw();
+                    if (!success || singlePass) {
+                        break;
+                    }
                 } while (!WaitOrQuit());
             } finally {
                 if (!singlePass) {
@@ -61,60 +66,119 @@ namespace stackoverflow_minigame {
             return true;
         }
 
-        private void Draw() {
-            Console.Clear();
-            Console.WriteLine("Stackoverflow Skyscraper - Leaderboard");
-            if (!Console.IsInputRedirected) {
-                Console.WriteLine("Live Leaderboard (press Q or Esc to close)");
-            } else {
-                Console.WriteLine("Live Leaderboard");
+        private bool Draw() {
+            int consoleWidth = ConsoleSafe.GetBufferWidth(80);
+            bool canPosition = !Console.IsOutputRedirected && consoleWidth > 0;
+            if (!layoutInitialized || !canPosition) {
+                Console.Clear();
+                layoutInitialized = canPosition;
+                Console.WriteLine("Stackoverflow Skyscraper - Leaderboard");
+                Console.WriteLine(canPosition ? "Live Leaderboard (press Q or Esc to close)" : "Live Leaderboard");
+                Console.WriteLine(new string('=', 50));
+                if (canPosition) {
+                    topSectionRow = Console.CursorTop;
+                    int blockHeight = 1 + EntriesToDisplay + 1;
+                    fastestSectionRow = topSectionRow + blockHeight;
+                }
             }
-            Console.WriteLine(new string('=', 50));
-            if (!TryFetchScores(() => scoreboard.GetTopScores(EntriesToDisplay), "top scores", out var topScores)) {
+
+            if (!TryFetchScores(() => scoreboard.GetTopScores(EntriesToDisplay), "top scores", out var topScores, out var topError)) {
+                WriteSection(canPosition, topSectionRow, "Top Levels", new List<ScoreEntry>(), consoleWidth, topError ?? string.Empty);
+                Environment.ExitCode = 1;
+                return false;
+            }
+
+            if (!TryFetchScores(() => scoreboard.GetFastestRuns(EntriesToDisplay), "fastest runs", out var fastest, out var fastError)) {
+                WriteSection(canPosition, fastestSectionRow, "Fastest Runs", new List<ScoreEntry>(), consoleWidth, fastError ?? string.Empty);
+                Environment.ExitCode = 1;
+                return false;
+            }
+
+            if (!layoutInitialized) {
                 Console.WriteLine("Top Levels");
-                Console.WriteLine("  (unable to load scoreboard)");
-                return;
-            }
-            Console.WriteLine("Top Levels");
-            if (topScores.Count == 0) {
-                Console.WriteLine("  (no runs recorded)");
-            } else {
-                for (int i = 0; i < topScores.Count; i++) {
-                    var entry = topScores[i];
-                    Console.WriteLine($"  {i + 1,2}. {entry.Initials,-3}  {entry.Score,4} lvls  {FormatTime(entry.RunTime)}");
-                }
-            }
-
-            Console.WriteLine();
-
-            if (!TryFetchScores(() => scoreboard.GetFastestRuns(EntriesToDisplay), "fastest runs", out var fastest)) {
+                RenderSectionLines(topScores, consoleWidth, false);
+                Console.WriteLine();
                 Console.WriteLine("Fastest Runs");
-                Console.WriteLine("  (unable to load scoreboard)");
+                RenderSectionLines(fastest, consoleWidth, true);
+                return true;
+            }
+
+            WriteSection(true, topSectionRow, "Top Levels", topScores, consoleWidth, null);
+            WriteSection(true, fastestSectionRow, "Fastest Runs", fastest, consoleWidth, null);
+            return true;
+        }
+
+        private void WriteSection(bool usePositioning, int startRow, string title, IReadOnlyList<ScoreEntry> scores, int consoleWidth, string? errorMessage) {
+            if (!usePositioning) return;
+            int row = startRow;
+            bool fastest = title.Contains("Fastest", StringComparison.OrdinalIgnoreCase);
+            WriteLineAt(row++, title, consoleWidth);
+            if (!string.IsNullOrWhiteSpace(errorMessage)) {
+                WriteLineAt(row++, $"  (unable to load scoreboard: {errorMessage})", consoleWidth);
+                row = PadRemainingRows(row, consoleWidth);
                 return;
             }
-            Console.WriteLine("Fastest Runs");
-            if (fastest.Count == 0) {
-                Console.WriteLine("  (no completed runs)");
-            } else {
-                for (int i = 0; i < fastest.Count; i++) {
-                    var entry = fastest[i];
-                    Console.WriteLine($"  {i + 1,2}. {entry.Initials,-3}  {FormatTime(entry.RunTime),8}  {entry.Score,4} lvls");
+            for (int i = 0; i < EntriesToDisplay; i++) {
+                string line;
+                if (i < scores.Count) {
+                    var entry = scores[i];
+                    line = fastest
+                        ? $"  {i + 1,2}. {entry.Initials,-3}  {TimeFormatting.FormatDuration(entry.RunTime),12}  {entry.Score,4} lvls"
+                        : $"  {i + 1,2}. {entry.Initials,-3}  {entry.Score,4} lvls  {TimeFormatting.FormatDuration(entry.RunTime)}";
+                } else {
+                    line = "  --";
                 }
+                WriteLineAt(row++, line, consoleWidth);
+            }
+            WriteLineAt(row, string.Empty, consoleWidth);
+        }
+
+        private int PadRemainingRows(int row, int consoleWidth) {
+            for (int i = 0; i < EntriesToDisplay; i++) {
+                WriteLineAt(row++, "  --", consoleWidth);
+            }
+            WriteLineAt(row, string.Empty, consoleWidth);
+            return row;
+        }
+
+        private void WriteLineAt(int row, string text, int consoleWidth) {
+            string padded = text.Length > consoleWidth ? text[..consoleWidth] : text.PadRight(consoleWidth);
+            if (ConsoleSafe.TrySetCursorPosition(0, row)) {
+                Console.Write(padded);
             }
         }
 
-        private static string FormatTime(TimeSpan span) {
-            if (span <= TimeSpan.Zero) return "--:--.--";
-            return span.ToString(@"mm\:ss\.ff");
+        private void RenderSectionLines(IReadOnlyList<ScoreEntry> scores, int consoleWidth, bool fastest) {
+            if (scores.Count == 0) {
+                Console.WriteLine("  (no runs recorded)");
+                return;
+            }
+            for (int i = 0; i < scores.Count; i++) {
+                var entry = scores[i];
+                string line = fastest
+                    ? $"  {i + 1,2}. {entry.Initials,-3}  {TimeFormatting.FormatDuration(entry.RunTime),12}  {entry.Score,4} lvls"
+                    : $"  {i + 1,2}. {entry.Initials,-3}  {entry.Score,4} lvls  {TimeFormatting.FormatDuration(entry.RunTime)}";
+                Console.WriteLine(line.Length > consoleWidth ? line[..consoleWidth] : line);
+            }
         }
 
-        private static bool TryFetchScores(Func<IReadOnlyList<ScoreEntry>> fetch, string label, out IReadOnlyList<ScoreEntry> scores) {
+        private static void PrintScoreboardError(string? error) {
+            if (string.IsNullOrWhiteSpace(error)) {
+                Console.WriteLine("  (unable to load scoreboard)");
+            } else {
+                Console.WriteLine($"  (unable to load scoreboard: {error})");
+            }
+        }
+
+        private static bool TryFetchScores(Func<IReadOnlyList<ScoreEntry>> fetch, string label, out IReadOnlyList<ScoreEntry> scores, out string? errorMessage) {
             try {
                 scores = fetch();
+                errorMessage = null;
                 return true;
             } catch (Exception ex) {
                 Diagnostics.ReportFailure($"Leaderboard viewer failed to read {label}.", ex);
                 scores = Array.Empty<ScoreEntry>();
+                errorMessage = ex.Message;
                 return false;
             }
         }

@@ -39,7 +39,7 @@ namespace stackoverflow_minigame {
 
         public void Reset() {
             ResetPlayer();
-            platforms.Clear();
+            ReleaseAllPlatforms();
             Offset = 0;
             MaxAltitude = 0f;
             LevelsCompleted = 0;
@@ -61,7 +61,7 @@ namespace stackoverflow_minigame {
             int start = centerOnPlayer
                 ? Math.Clamp((int)MathF.Round(Player.X) - length / 2, 0, Math.Max(0, interiorWidth - length))
                 : rand.Next(Math.Max(0, interiorWidth - length) + 1);
-            platforms.Add(new Platform(start, y, length, interiorWidth));
+            platforms.Add(Platform.Acquire(start, y, length, interiorWidth));
         }
 
         public void Update(float deltaSeconds, int horizontalDirection, bool fastDropRequested) {
@@ -128,7 +128,12 @@ namespace stackoverflow_minigame {
             if (Player.Y > threshold) {
                 Offset = (int)(Player.Y - threshold);
             }
-            platforms.RemoveAll(p => p.Y < Offset);
+            for (int i = platforms.Count - 1; i >= 0; i--) {
+                if (platforms[i].Y < Offset) {
+                    Platform.Release(platforms[i]);
+                    platforms.RemoveAt(i);
+                }
+            }
         }
 
         private void ResetPlayer() {
@@ -147,6 +152,12 @@ namespace stackoverflow_minigame {
 
         public void SetVisibleRowBudget(int rows) {
             visibleRowBudget = Math.Max(1, rows);
+        }
+        private void ReleaseAllPlatforms() {
+            foreach (Platform platform in platforms) {
+                Platform.Release(platform);
+            }
+            platforms.Clear();
         }
     }
 }
