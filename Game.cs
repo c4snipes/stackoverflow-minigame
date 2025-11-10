@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Text;
 using System.Threading;
 using System.Security;
 
@@ -21,6 +20,7 @@ namespace stackoverflow_minigame {
         private readonly Input input;
         private readonly Spawner spawner;
         private readonly Scoreboard scoreboard;
+        private readonly InitialsPrompt initialsPrompt;
         private int framesClimbed = 0;
         private int bestFrames = 0;
         private bool playerWon = false;
@@ -50,9 +50,6 @@ namespace stackoverflow_minigame {
         private const int MAX_PROGRESS_BAR_WIDTH = 60;
         private const float HorizontalIntentMemorySeconds = 0.12f;
         private const float DangerZoneThreshold = 3f;
-        private const int BigGlyphHeight = GlyphLibrary.GlyphHeight;
-
-        [ThreadStatic] private static StringBuilder? GlyphLineBuilder;
 
         private static void DefaultFailureLogger(string message) {
             try {
@@ -70,6 +67,7 @@ namespace stackoverflow_minigame {
             input = new Input();
             spawner = new Spawner();
             scoreboard = new Scoreboard(Scoreboard.ResolveDefaultPath());
+            initialsPrompt = new InitialsPrompt(input);
         }
 
         public void Run() {
@@ -174,219 +172,26 @@ namespace stackoverflow_minigame {
                 return true;
             }
 
-            using (input.PauseListening()) {
-                input.ClearBuffer();
-                if (!TryPromptForInitials(out var initials)) {
-                    return false;
-                }
-                playerInitials = initials;
-                initialsConfirmed = true;
-                return true;
-            }
-        }
+            var callbacks = new InitialsPrompt.Callbacks(
+                () => InitialsPromptStarted?.Invoke(),
+                ch => InitialsCharAccepted?.Invoke(ch),
+                ch => InitialsCharRejected?.Invoke(ch),
+                initials => InitialsCommitted?.Invoke(initials),
+                () => InitialsCanceled?.Invoke(),
+                fallback => InitialsFallbackUsed?.Invoke(fallback)
+            );
 
-        // Runs the interactive initials workflow: blinking banner, validation, and callback signaling.
-        private bool TryPromptForInitials(out string initials) {
-            const int maxChars = 3;
-            initials = "AAA";
-            string current = string.Empty;
-
-            Console.Clear();
-            InitialsPromptStarted?.Invoke();
-            WriteArcadePrompt(out int artTopRow, out int promptRow);
-            bool lastBlink = false;
-            string lastRendered = string.Empty;
-            bool lastRenderSucceeded = false;
-
-            void InvalidateRender() {
-                lastRendered = string.Empty;
-                lastBlink = false;
-                lastRenderSucceeded = false;
-            }
-
-            void RefreshPrompt(bool forceBlink) {
-                bool effectiveBlink = forceBlink ? true : (Environment.TickCount / 500 % 2) == 0;
-                if (lastRenderSucceeded && lastBlink == effectiveBlink && lastRendered == current) return;
-                WriteInitialsLine(current, maxChars, promptRow, effectiveBlink);
-                lastRenderSucceeded = TryRenderInitialsArt(current, maxChars, artTopRow, effectiveBlink);
-                lastBlink = effectiveBlink;
-                lastRendered = current;
-            }
-
-            while (running) {
-                RefreshPrompt(forceBlink: false);
-
-                ConsoleKeyInfo keyInfo;
-                try {
-                    if (!Console.KeyAvailable) {
-                        Thread.Sleep(50);
-                        continue;
-                    }
-                    keyInfo = Console.ReadKey(intercept: true);
-                } catch (InvalidOperationException) {
-                    initials = playerInitials;
-                    InitialsFallbackUsed?.Invoke(playerInitials);
-                    return true;
-                } catch (IOException ex) {
-                    Diagnostics.ReportFailure("Initials prompt failed due to IO error; using previous initials.", ex);
-                    initials = playerInitials;
-                    InitialsFallbackUsed?.Invoke(playerInitials);
-                    return true;
-                } catch (SecurityException ex) {
-                    Diagnostics.ReportFailure("Initials prompt cannot read keys due to permissions; using previous initials.", ex);
-                    initials = playerInitials;
-                    InitialsFallbackUsed?.Invoke(playerInitials);
-                    return true;
-                }
-
-                if (keyInfo.Key == ConsoleKey.Escape) {
-                    InitialsCanceled?.Invoke();
-                    return false;
-                }
-
-                if (keyInfo.Key == ConsoleKey.Q && keyInfo.Modifiers == ConsoleModifiers.Control) {
-                    running = false;
-                    return false;
-                }
-
-                if (keyInfo.Key == ConsoleKey.Enter) {
-                    if (current.Length == 0) continue;
-                    while (current.Length < maxChars) current += '_';
-                    initials = current.ToUpperInvariant();
-                    InitialsCommitted?.Invoke(initials);
-                    InvalidateRender();
-                    RefreshPrompt(forceBlink: true);
-                    return true;
-                }
-
-                if (keyInfo.Key == ConsoleKey.Backspace && current.Length > 0) {
-                    current = current[..^1];
-                    continue;
-                }
-
-                if (!TryNormalizeInitialChar(keyInfo, out char ch)) {
-                    InitialsCharRejected?.Invoke(keyInfo.KeyChar);
-                    continue;
-                }
-                if (current.Length >= maxChars) {
-                    InitialsCharRejected?.Invoke(ch);
-                    continue;
-                }
-
-                current += ch;
-                InitialsCharAccepted?.Invoke(ch);
-                InvalidateRender();
-            }
-
-            initials = playerInitials;
-            InitialsFallbackUsed?.Invoke(playerInitials);
-            return false;
-        }
-
-        private static void WriteArcadePrompt(out int artTopRow, out int promptRow) {
-            ConsoleColor originalColor = Console.ForegroundColor;
-            try {
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.WriteLine("========================================");
-                Console.WriteLine("          STACKOVERFLOW SKY            ");
-                Console.WriteLine("========================================");
-                Console.WriteLine();
-                Console.WriteLine("ENTER YOUR INITIALS");
-                Console.WriteLine("UPPERCASE LETTERS & NUMBERS ONLY (3 CHARACTERS, ESC TO CANCEL)");
-                Console.WriteLine();
-                artTopRow = Console.CursorTop;
-                for (int i = 0; i < BigGlyphHeight; i++) {
-                    Console.WriteLine();
-                }
-                Console.WriteLine();
-                promptRow = Console.CursorTop;
-            } finally {
-                Console.ForegroundColor = originalColor;
-            }
-        }
-
-        // Redraws the oversized ASCII glyphs for the initials entry banner each frame.
-        private static bool TryRenderInitialsArt(string current, int maxChars, int topRow, bool blinkOn) {
-            if (current.Length > maxChars) {
-                current = current[..maxChars];
-            }
-
-            string padded = current.PadRight(maxChars, blinkOn ? '_' : ' ');
-            string[] composedRows = BuildInitialsGlyphRows(padded);
-            try {
-                for (int row = 0; row < BigGlyphHeight; row++) {
-                    if (!ConsoleSafe.TrySetCursorPosition(0, topRow + row)) {
-                        continue;
-                    }
-                    string line = composedRows[row];
-                    int width = Console.BufferWidth > 0 ? Console.BufferWidth - 1 : line.Length;
-                    if (line.Length < width) line = line.PadRight(width);
-                    Console.Write(line.Length > width ? line[..width] : line);
-                }
-                return true;
-            } catch (IOException ex) {
-                Diagnostics.ReportFailure("Failed to render initials art due to IO error.", ex);
-                return false;
-            } catch (ArgumentException ex) {
-                Diagnostics.ReportFailure("Failed to render initials art due to argument error.", ex);
+            if (!initialsPrompt.TryCapture(out var initials, playerInitials, callbacks)) {
                 return false;
             }
-        }
 
-        private static string[] BuildInitialsGlyphRows(string padded) {
-            string[][] glyphRows = new string[padded.Length][];
-            for (int i = 0; i < padded.Length; i++) {
-                glyphRows[i] = GlyphLibrary.GetGlyph(padded[i]);
-            }
-
-            string[] composed = new string[BigGlyphHeight];
-            for (int row = 0; row < BigGlyphHeight; row++) {
-                var builder = GlyphLineBuilder ??= new StringBuilder(64);
-                builder.Clear();
-                for (int i = 0; i < glyphRows.Length; i++) {
-                    builder.Append(glyphRows[i][row]).Append(' ');
-                }
-                composed[row] = builder.ToString();
-            }
-            return composed;
-        }
-
-        private static void WriteInitialsLine(string current, int maxChars, int row, bool blinkOn) {
-            string display = current.PadRight(maxChars, blinkOn ? '_' : ' ');
-            if (!ConsoleSafe.TrySetCursorPosition(0, row)) return;
-            Console.Write(new string(' ', Math.Max(0, Console.BufferWidth - 1)));
-            if (!ConsoleSafe.TrySetCursorPosition(0, row)) return;
-            Console.Write($"INITIALS: {display}");
-        }
-
-        // Attempts to coerce the user's keypress into an uppercase alphanumeric character regardless of keyboard state.
-        private static bool TryNormalizeInitialChar(ConsoleKeyInfo keyInfo, out char normalized) {
-            char raw = keyInfo.KeyChar;
-            if (!char.IsControl(raw) && char.IsLetterOrDigit(raw)) {
-                normalized = char.ToUpperInvariant(raw);
-                return true;
-            }
-
-            if (keyInfo.Key >= ConsoleKey.A && keyInfo.Key <= ConsoleKey.Z) {
-                normalized = (char)('A' + (keyInfo.Key - ConsoleKey.A));
-                return true;
-            }
-
-            if (keyInfo.Key >= ConsoleKey.D0 && keyInfo.Key <= ConsoleKey.D9) {
-                normalized = (char)('0' + (keyInfo.Key - ConsoleKey.D0));
-                return true;
-            }
-
-            if (keyInfo.Key >= ConsoleKey.NumPad0 && keyInfo.Key <= ConsoleKey.NumPad9) {
-                normalized = (char)('0' + (keyInfo.Key - ConsoleKey.NumPad0));
-                return true;
-            }
-
-            normalized = default;
-            return false;
+            playerInitials = initials;
+            initialsConfirmed = true;
+            return true;
         }
 
         // Core gameplay loop: process input, advance world state, render, and keep a stable frame cadence.
+        // Central tick loop: pulls input, advances simulation, renders, and enforces the frame cadence.
         private void GameLoop() {
             Stopwatch deltaTimer = Stopwatch.StartNew();
             while (state == GameState.Running && running) {

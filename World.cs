@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 
-namespace stackoverflow_minigame {
-    class World {
+namespace stackoverflow_minigame
+{
+    class World
+    {
         public int Width { get; }
         public int Height { get; }
         public int Offset { get; private set; }
@@ -28,7 +30,8 @@ namespace stackoverflow_minigame {
         private float highestPlatformTouched;
         private int visibleRowBudget = int.MaxValue;
 
-        public World(int width, int height) {
+        public World(int width, int height)
+        {
             Width = width;
             Height = height;
             platforms = new List<Platform>();
@@ -37,7 +40,8 @@ namespace stackoverflow_minigame {
             Reset();
         }
 
-        public void Reset() {
+        public void Reset()
+        {
             ResetPlayer();
             ReleaseAllPlatforms();
             Offset = 0;
@@ -50,12 +54,14 @@ namespace stackoverflow_minigame {
             AddSeedPlatform(InitialPlatformY + InitialPlatformGap, centerOnPlayer: false);
         }
 
-        private int GetRandomPlatformLength() {
+        private int GetRandomPlatformLength()
+        {
             int maxLength = Math.Min(Width, MaxPlatformLength);
             return rand.Next(MinPlatformLength, Math.Max(MinPlatformLength, maxLength) + 1);
         }
 
-        private void AddSeedPlatform(int y, bool centerOnPlayer) {
+        private void AddSeedPlatform(int y, bool centerOnPlayer)
+        {
             int length = GetRandomPlatformLength();
             int interiorWidth = Math.Max(1, Width);
             int start = centerOnPlayer
@@ -64,7 +70,9 @@ namespace stackoverflow_minigame {
             platforms.Add(Platform.Acquire(start, y, length, interiorWidth));
         }
 
-        public void Update(float deltaSeconds, int horizontalDirection, bool fastDropRequested) {
+        // Advances the player and platform state for a single frame, handling horizontal drift, gravity, landings, and scrolling.
+        public void Update(float deltaSeconds, int horizontalDirection, bool fastDropRequested)
+        {
             LandedThisFrame = false;
             LevelAwardedThisFrame = false;
             BorderHitThisFrame = false;
@@ -72,10 +80,12 @@ namespace stackoverflow_minigame {
 
             float horizontalMax = Math.Max(0, Width - 1);
             float newX = Player.X;
-            if (horizontalDirection != 0) {
+            if (horizontalDirection != 0)
+            {
                 float horizontalSpeed = GroundHorizontalUnitsPerSecond;
                 bool isAirborne = MathF.Abs(Player.VelocityY) > 0.05f;
-                if (isAirborne) {
+                if (isAirborne)
+                {
                     horizontalSpeed *= AirHorizontalSpeedMultiplier;
                 }
                 newX += horizontalDirection * horizontalSpeed * deltaSeconds;
@@ -84,7 +94,8 @@ namespace stackoverflow_minigame {
             BorderHitThisFrame = MathF.Abs(clampedX - newX) > float.Epsilon;
             Player.X = clampedX;
 
-            if (fastDropRequested) {
+            if (fastDropRequested)
+            {
                 Player.VelocityY += FastDropImpulse;
             }
 
@@ -92,25 +103,31 @@ namespace stackoverflow_minigame {
             float oldY = Player.Y;
             float newY = oldY + Player.VelocityY * stepScale;
 
-            if (Player.VelocityY < 0) {
+            if (Player.VelocityY < 0)
+            {
                 Platform? collidePlatform = null;
                 int playerColumn = Math.Clamp((int)MathF.Round(Player.X), 0, Math.Max(0, Width - 1));
-                foreach (Platform platform in platforms) {
+                foreach (Platform platform in platforms)
+                {
                     int platformStart = (int)MathF.Round(platform.X);
                     int platformEnd = platformStart + platform.Length - 1;
-                    if (playerColumn >= platformStart && playerColumn <= platformEnd && platform.Y <= oldY && platform.Y >= newY) {
+                    if (playerColumn >= platformStart && playerColumn <= platformEnd && platform.Y <= oldY && platform.Y >= newY)
+                    {
                         collidePlatform = platform;
                         break;
                     }
                 }
-                if (collidePlatform != null) {
+                if (collidePlatform != null)
+                {
                     newY = collidePlatform.Y;
                     Player.VelocityY = World.JumpVelocity;
                     LandedThisFrame = true;
-                    if (collidePlatform.Y > highestPlatformTouched + float.Epsilon) {
+                    if (collidePlatform.Y > highestPlatformTouched + float.Epsilon)
+                    {
                         bool hasTouchedBefore = !float.IsNegativeInfinity(highestPlatformTouched);
                         highestPlatformTouched = collidePlatform.Y;
-                        if (hasTouchedBefore) {
+                        if (hasTouchedBefore)
+                        {
                             LevelsCompleted++;
                             LevelAwardedThisFrame = true;
                         }
@@ -119,42 +136,52 @@ namespace stackoverflow_minigame {
             }
 
             Player.Y = newY;
-            if (Player.Y > MaxAltitude) {
+            if (Player.Y > MaxAltitude)
+            {
                 MaxAltitude = Player.Y;
             }
 
             int thresholdSource = visibleRowBudget <= 0 ? Height : visibleRowBudget;
             int threshold = Math.Max(1, Math.Min(Height / 2, thresholdSource / 2));
-            if (Player.Y > threshold) {
+            if (Player.Y > threshold)
+            {
                 Offset = (int)(Player.Y - threshold);
             }
-            for (int i = platforms.Count - 1; i >= 0; i--) {
-                if (platforms[i].Y < Offset) {
+            for (int i = platforms.Count - 1; i >= 0; i--)
+            {
+                if (platforms[i].Y < Offset)
+                {
                     Platform.Release(platforms[i]);
                     platforms.RemoveAt(i);
                 }
             }
         }
 
-        private void ResetPlayer() {
+        private void ResetPlayer()
+        {
             Player ??= new Player(Width / 2, 0);
             Player.X = Width / 2f;
             Player.Y = 0f;
             Player.VelocityY = 0f;
         }
 
-        public IEnumerable<Entity> Entities {
-            get {
+        public IEnumerable<Entity> Entities
+        {
+            get
+            {
                 yield return Player;
                 foreach (Platform p in platforms) yield return p;
             }
         }
 
-        public void SetVisibleRowBudget(int rows) {
+        public void SetVisibleRowBudget(int rows)
+        {
             visibleRowBudget = Math.Max(1, rows);
         }
-        private void ReleaseAllPlatforms() {
-            foreach (Platform platform in platforms) {
+        private void ReleaseAllPlatforms()
+        {
+            foreach (Platform platform in platforms)
+            {
                 Platform.Release(platform);
             }
             platforms.Clear();

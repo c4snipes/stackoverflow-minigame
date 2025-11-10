@@ -2,8 +2,10 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
-namespace stackoverflow_minigame {
-    internal static class GlyphLibrary {
+namespace stackoverflow_minigame
+{
+    internal static class GlyphLibrary
+    {
         public const int GlyphHeight = 5;
         public const int GlyphWidth = 5;
 
@@ -22,36 +24,44 @@ namespace stackoverflow_minigame {
         private static readonly ConcurrentDictionary<char, byte> FallbackWarnedGlyphs = new();
         private static bool loadStatusReported;
 
-        static GlyphLibrary() {
+        static GlyphLibrary()
+        {
             PrimeCacheForAllowedGlyphs();
         }
 
-        public static string[] GetGlyph(char ch) {
+        public static string[] GetGlyph(char ch)
+        {
             char key = char.ToUpperInvariant(ch);
             bool trace = HasGlyphInstrumentation;
-            if (trace) {
+            if (trace)
+            {
                 GlyphLookupStarted?.Invoke(key);
             }
 
             bool usedFallback = false;
-            if (!GlyphCache.TryGetValue(key, out var glyph)) {
-                if (!GlyphBitmaps.TryGetValue(key, out var bitmap)) {
+            if (!GlyphCache.TryGetValue(key, out var glyph))
+            {
+                if (!GlyphBitmaps.TryGetValue(key, out var bitmap))
+                {
                     usedFallback = true;
                     bool fallbackInstrumented = GlyphLookupFallback != null;
                     GlyphLookupFallback?.Invoke(key);
-                    if (!fallbackInstrumented && FallbackWarnedGlyphs.TryAdd(key, 0)) {
+                    if (!fallbackInstrumented && FallbackWarnedGlyphs.TryAdd(key, 0))
+                    {
                         Diagnostics.ReportWarning($"Glyph lookup fallback for '{key}'.");
                     }
                     bitmap = GetFallbackBitmap();
                 }
 
                 glyph = DecodeGlyph(bitmap);
-                if (AllowedGlyphs.Contains(key)) {
+                if (AllowedGlyphs.Contains(key))
+                {
                     GlyphCache[key] = glyph;
                 }
             }
 
-            if (!usedFallback && trace) {
+            if (!usedFallback && trace)
+            {
                 GlyphLookupSucceeded?.Invoke(key, glyph);
             }
 
@@ -61,7 +71,8 @@ namespace stackoverflow_minigame {
         private static bool HasGlyphInstrumentation =>
             GlyphLookupStarted != null || GlyphLookupSucceeded != null || GlyphLookupFallback != null;
 
-        public static void ReportStatus() {
+        public static void ReportStatus()
+        {
             if (loadStatusReported) return;
             loadStatusReported = true;
 
@@ -69,55 +80,74 @@ namespace stackoverflow_minigame {
             Diagnostics.ReportInfo($"[GlyphLibrary] Loading glyph art... ({variants} variants registered)");
 
             List<char> missing = new();
-            foreach (char required in RequiredGlyphs) {
-                if (!GlyphBitmaps.ContainsKey(required)) {
+            foreach (char required in RequiredGlyphs)
+            {
+                if (!GlyphBitmaps.ContainsKey(required))
+                {
                     missing.Add(required);
                 }
             }
 
-            if (missing.Count == 0) {
+            if (missing.Count == 0)
+            {
                 Diagnostics.ReportInfo("[GlyphLibrary] All required glyphs loaded.");
-            } else {
+            }
+            else
+            {
                 Diagnostics.ReportWarning($"[GlyphLibrary] Missing glyphs: {string.Join(", ", missing)}");
             }
         }
 
-        private static void PrimeCacheForAllowedGlyphs() {
-            foreach (char allowed in AllowedGlyphs) {
-                if (GlyphBitmaps.TryGetValue(allowed, out var bitmap)) {
+        private static void PrimeCacheForAllowedGlyphs()
+        {
+            foreach (char allowed in AllowedGlyphs)
+            {
+                if (GlyphBitmaps.TryGetValue(allowed, out var bitmap))
+                {
                     GlyphCache[allowed] = DecodeGlyph(bitmap);
                 }
             }
         }
 
-        private static byte[] GetFallbackBitmap() {
-            if (GlyphBitmaps.TryGetValue(FallbackGlyphKey, out var fallback)) {
+        private static byte[] GetFallbackBitmap()
+        {
+            if (GlyphBitmaps.TryGetValue(FallbackGlyphKey, out var fallback))
+            {
                 return fallback;
             }
             throw new InvalidOperationException("GlyphLibrary requires a space glyph (' ') for fallback rendering.");
         }
 
-        private static Dictionary<char, byte[]> BuildGlyphBitmaps() {
+        private static Dictionary<char, byte[]> BuildGlyphBitmaps()
+        {
             var map = new Dictionary<char, byte[]>();
 
-            void Add(char key, params string[] rows) {
-                if (rows.Length != GlyphHeight) {
+            void Add(char key, params string[] rows)
+            {
+                if (rows.Length != GlyphHeight)
+                {
                     throw new ArgumentException("Glyph height mismatch", nameof(rows));
                 }
 
                 var bitmap = new byte[GlyphHeight];
-                for (int i = 0; i < GlyphHeight; i++) {
+                for (int i = 0; i < GlyphHeight; i++)
+                {
                     string row = rows[i];
-                    if (row.Length != GlyphWidth) {
+                    if (row.Length != GlyphWidth)
+                    {
                         throw new ArgumentException("Glyph width mismatch", nameof(rows));
                     }
 
                     byte rowBits = 0;
-                    for (int col = 0; col < GlyphWidth; col++) {
+                    for (int col = 0; col < GlyphWidth; col++)
+                    {
                         char cell = row[col];
-                        if (cell == '1') {
+                        if (cell == '1')
+                        {
                             rowBits |= (byte)(1 << (GlyphWidth - 1 - col));
-                        } else if (cell != '0') {
+                        }
+                        else if (cell != '0')
+                        {
                             throw new ArgumentException($"Invalid glyph pixel '{cell}' at row {i}, column {col}.", nameof(rows));
                         }
                     }
@@ -126,7 +156,8 @@ namespace stackoverflow_minigame {
                 }
 
                 char normalizedKey = char.ToUpperInvariant(key);
-                if (map.ContainsKey(normalizedKey)) {
+                if (map.ContainsKey(normalizedKey))
+                {
                     throw new InvalidOperationException($"Duplicate glyph definition for '{normalizedKey}'.");
                 }
 
@@ -399,23 +430,28 @@ namespace stackoverflow_minigame {
                 "00000",
                 "00000");
 
-            if (!map.ContainsKey(FallbackGlyphKey)) {
+            if (!map.ContainsKey(FallbackGlyphKey))
+            {
                 throw new InvalidOperationException("Space glyph (' ') is required for fallback rendering.");
             }
 
             return map;
         }
 
-        private static string[] DecodeGlyph(byte[] bitmap) {
-            if (bitmap.Length != GlyphHeight) {
+        private static string[] DecodeGlyph(byte[] bitmap)
+        {
+            if (bitmap.Length != GlyphHeight)
+            {
                 throw new ArgumentException($"Bitmap must be {GlyphHeight} rows.", nameof(bitmap));
             }
 
             var rows = new string[GlyphHeight];
-            for (int i = 0; i < GlyphHeight; i++) {
+            for (int i = 0; i < GlyphHeight; i++)
+            {
                 char[] chars = new char[GlyphWidth];
                 byte rowBits = bitmap[i];
-                for (int col = 0; col < GlyphWidth; col++) {
+                for (int col = 0; col < GlyphWidth; col++)
+                {
                     bool filled = (rowBits & (1 << (GlyphWidth - 1 - col))) != 0;
                     chars[col] = filled ? '█' : ' ';
                 }

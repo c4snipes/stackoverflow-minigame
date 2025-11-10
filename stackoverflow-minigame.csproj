@@ -6,4 +6,26 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
+
+  <PropertyGroup>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="ConsoleSafe.cs" />
+    <Compile Include="Diagnostics.cs" />
+    <Compile Include="Entities.cs" />
+    <Compile Include="Game.cs" />
+    <Compile Include="GlyphLibrary.cs" />
+    <Compile Include="InitialsPrompt.cs" />
+    <Compile Include="Input.cs" />
+    <Compile Include="LeaderboardViewer.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="Renderer.cs" />
+    <Compile Include="Scoreboard.cs" />
+    <Compile Include="Spawner.cs" />
+    <Compile Include="TimeFormatting.cs" />
+    <Compile Include="Utils/Tracing.cs" />
+    <Compile Include="World.cs" />
+  </ItemGroup>
 </Project>

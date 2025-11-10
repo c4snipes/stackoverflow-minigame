@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 
-namespace stackoverflow_minigame {
-    class LeaderboardViewer {
+namespace stackoverflow_minigame
+{
+    class LeaderboardViewer
+    {
         private readonly Scoreboard scoreboard;
         private const int EntriesToDisplay = 8;
         private const int RefreshIntervalMs = 1000;
@@ -11,39 +13,52 @@ namespace stackoverflow_minigame {
         private int topSectionRow;
         private int fastestSectionRow;
 
-        public LeaderboardViewer() {
+        public LeaderboardViewer()
+        {
             scoreboard = new Scoreboard(Scoreboard.ResolveDefaultPath());
         }
 
-        public void Run() {
+        public void Run()
+        {
             Console.Title = "Stackoverflow Skyscraper - Leaderboard";
             bool singlePass = Console.IsOutputRedirected;
-            if (!singlePass) {
+            if (!singlePass)
+            {
                 Console.CursorVisible = false;
             }
-            try {
-                do {
+            try
+            {
+                do
+                {
                     bool success = Draw();
-                    if (!success || singlePass) {
+                    if (!success || singlePass)
+                    {
                         break;
                     }
                 } while (!WaitOrQuit());
-            } finally {
-                if (!singlePass) {
+            }
+            finally
+            {
+                if (!singlePass)
+                {
                     Console.CursorVisible = true;
                 }
             }
         }
 
-        private bool WaitOrQuit() {
-            if (Console.IsInputRedirected) {
+        private bool WaitOrQuit()
+        {
+            if (Console.IsInputRedirected)
+            {
                 Thread.Sleep(RefreshIntervalMs);
                 return false;
             }
             const int pollIntervalMs = 100;
             int elapsed = 0;
-            while (elapsed < RefreshIntervalMs) {
-                if (TryReadQuitKey(out bool quit) && quit) {
+            while (elapsed < RefreshIntervalMs)
+            {
+                if (TryReadQuitKey(out bool quit) && quit)
+                {
                     return true;
                 }
                 Thread.Sleep(pollIntervalMs);
@@ -52,49 +67,60 @@ namespace stackoverflow_minigame {
             return false;
         }
 
-        private bool TryReadQuitKey(out bool quit) {
+        private bool TryReadQuitKey(out bool quit)
+        {
             quit = false;
-            try {
+            try
+            {
                 if (Console.IsInputRedirected || !Console.KeyAvailable) return false;
                 ConsoleKeyInfo key = Console.ReadKey(intercept: true);
-                if (key.Key == ConsoleKey.Q || key.Key == ConsoleKey.Escape) {
+                if (key.Key == ConsoleKey.Q || key.Key == ConsoleKey.Escape)
+                {
                     quit = true;
                 }
-            } catch (InvalidOperationException) {
+            }
+            catch (InvalidOperationException)
+            {
                 // Input redirected; ignore.
             }
             return true;
         }
 
-        private bool Draw() {
+        private bool Draw()
+        {
             int consoleWidth = ConsoleSafe.GetBufferWidth(80);
             bool canPosition = !Console.IsOutputRedirected && consoleWidth > 0;
-            if (!layoutInitialized || !canPosition) {
+            if (!layoutInitialized || !canPosition)
+            {
                 Console.Clear();
                 layoutInitialized = canPosition;
                 Console.WriteLine("Stackoverflow Skyscraper - Leaderboard");
                 Console.WriteLine(canPosition ? "Live Leaderboard (press Q or Esc to close)" : "Live Leaderboard");
                 Console.WriteLine(new string('=', 50));
-                if (canPosition) {
+                if (canPosition)
+                {
                     topSectionRow = Console.CursorTop;
                     int blockHeight = 1 + EntriesToDisplay + 1;
                     fastestSectionRow = topSectionRow + blockHeight;
                 }
             }
 
-            if (!TryFetchScores(() => scoreboard.GetTopScores(EntriesToDisplay), "top scores", out var topScores, out var topError)) {
+            if (!TryFetchScores(() => scoreboard.GetTopScores(EntriesToDisplay), "top scores", out var topScores, out var topError))
+            {
                 WriteSection(canPosition, topSectionRow, "Top Levels", new List<ScoreEntry>(), consoleWidth, topError ?? string.Empty);
                 Environment.ExitCode = 1;
                 return false;
             }
 
-            if (!TryFetchScores(() => scoreboard.GetFastestRuns(EntriesToDisplay), "fastest runs", out var fastest, out var fastError)) {
+            if (!TryFetchScores(() => scoreboard.GetFastestRuns(EntriesToDisplay), "fastest runs", out var fastest, out var fastError))
+            {
                 WriteSection(canPosition, fastestSectionRow, "Fastest Runs", new List<ScoreEntry>(), consoleWidth, fastError ?? string.Empty);
                 Environment.ExitCode = 1;
                 return false;
             }
 
-            if (!layoutInitialized) {
+            if (!layoutInitialized)
+            {
                 Console.WriteLine("Top Levels");
                 RenderSectionLines(topScores, consoleWidth, false);
                 Console.WriteLine();
@@ -108,24 +134,30 @@ namespace stackoverflow_minigame {
             return true;
         }
 
-        private void WriteSection(bool usePositioning, int startRow, string title, IReadOnlyList<ScoreEntry> scores, int consoleWidth, string? errorMessage) {
+        private void WriteSection(bool usePositioning, int startRow, string title, IReadOnlyList<ScoreEntry> scores, int consoleWidth, string? errorMessage)
+        {
             if (!usePositioning) return;
             int row = startRow;
             bool fastest = title.Contains("Fastest", StringComparison.OrdinalIgnoreCase);
             WriteLineAt(row++, title, consoleWidth);
-            if (!string.IsNullOrWhiteSpace(errorMessage)) {
+            if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
                 WriteLineAt(row++, $"  (unable to load scoreboard: {errorMessage})", consoleWidth);
                 row = PadRemainingRows(row, consoleWidth);
                 return;
             }
-            for (int i = 0; i < EntriesToDisplay; i++) {
+            for (int i = 0; i < EntriesToDisplay; i++)
+            {
                 string line;
-                if (i < scores.Count) {
+                if (i < scores.Count)
+                {
                     var entry = scores[i];
                     line = fastest
                         ? $"  {i + 1,2}. {entry.Initials,-3}  {TimeFormatting.FormatDuration(entry.RunTime),12}  {entry.Score,4} lvls"
                         : $"  {i + 1,2}. {entry.Initials,-3}  {entry.Score,4} lvls  {TimeFormatting.FormatDuration(entry.RunTime)}";
-                } else {
+                }
+                else
+                {
                     line = "  --";
                 }
                 WriteLineAt(row++, line, consoleWidth);
@@ -133,27 +165,34 @@ namespace stackoverflow_minigame {
             WriteLineAt(row, string.Empty, consoleWidth);
         }
 
-        private int PadRemainingRows(int row, int consoleWidth) {
-            for (int i = 0; i < EntriesToDisplay; i++) {
+        private int PadRemainingRows(int row, int consoleWidth)
+        {
+            for (int i = 0; i < EntriesToDisplay; i++)
+            {
                 WriteLineAt(row++, "  --", consoleWidth);
             }
             WriteLineAt(row, string.Empty, consoleWidth);
             return row;
         }
 
-        private void WriteLineAt(int row, string text, int consoleWidth) {
+        private void WriteLineAt(int row, string text, int consoleWidth)
+        {
             string padded = text.Length > consoleWidth ? text[..consoleWidth] : text.PadRight(consoleWidth);
-            if (ConsoleSafe.TrySetCursorPosition(0, row)) {
+            if (ConsoleSafe.TrySetCursorPosition(0, row))
+            {
                 Console.Write(padded);
             }
         }
 
-        private void RenderSectionLines(IReadOnlyList<ScoreEntry> scores, int consoleWidth, bool fastest) {
-            if (scores.Count == 0) {
+        private void RenderSectionLines(IReadOnlyList<ScoreEntry> scores, int consoleWidth, bool fastest)
+        {
+            if (scores.Count == 0)
+            {
                 Console.WriteLine("  (no runs recorded)");
                 return;
             }
-            for (int i = 0; i < scores.Count; i++) {
+            for (int i = 0; i < scores.Count; i++)
+            {
                 var entry = scores[i];
                 string line = fastest
                     ? $"  {i + 1,2}. {entry.Initials,-3}  {TimeFormatting.FormatDuration(entry.RunTime),12}  {entry.Score,4} lvls"
@@ -162,20 +201,28 @@ namespace stackoverflow_minigame {
             }
         }
 
-        private static void PrintScoreboardError(string? error) {
-            if (string.IsNullOrWhiteSpace(error)) {
+        private static void PrintScoreboardError(string? error)
+        {
+            if (string.IsNullOrWhiteSpace(error))
+            {
                 Console.WriteLine("  (unable to load scoreboard)");
-            } else {
+            }
+            else
+            {
                 Console.WriteLine($"  (unable to load scoreboard: {error})");
             }
         }
 
-        private static bool TryFetchScores(Func<IReadOnlyList<ScoreEntry>> fetch, string label, out IReadOnlyList<ScoreEntry> scores, out string? errorMessage) {
-            try {
+        private static bool TryFetchScores(Func<IReadOnlyList<ScoreEntry>> fetch, string label, out IReadOnlyList<ScoreEntry> scores, out string? errorMessage)
+        {
+            try
+            {
                 scores = fetch();
                 errorMessage = null;
                 return true;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Diagnostics.ReportFailure($"Leaderboard viewer failed to read {label}.", ex);
                 scores = Array.Empty<ScoreEntry>();
                 errorMessage = ex.Message;

@@ -1,0 +1,28 @@
+# EditorConfig helps define and maintain consistent coding styles.
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+charset = utf-8
+
+# Keep using file-scoped namespaces only when explicitly written.
+csharp_style_namespace_declarations = block_scoped:error
+
+# Prefer var for implicitly typed locals only when evident.
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+
+# Expression-bodied members only for very small accessors.
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = when_on_single_line:suggestion
+
+# Layout preferences.
+csharp_new_line_before_open_brace = all
+csharp_new_line_between_query_expression_clauses = true
+
+# Organize using statements
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = true
