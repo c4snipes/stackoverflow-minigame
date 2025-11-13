@@ -67,6 +67,24 @@ If you don’t want to run the `curl` helper manually, the game can trigger the 
 
 When those variables are present, each successful append posts the JSON line (base64-encoded) to GitHub’s `repository_dispatch` endpoint in the background. The `Sync Scoreboard` workflow then appends the same line on GitHub and pushes the change, keeping everyone’s leaderboard in sync.
 
+> Tip: You can copy `.env` to `.env.local`, adjust the values for your environment, then run `set -a && source .env.local && set +a` (bash/zsh) before `dotnet run` so the game picks them up automatically.
+
+### Verify the end-to-end pipeline
+1. Load your environment variables (PAT-based or webhook-based) with the `set -a && source … && set +a` pattern so the game can see them.
+2. Dry-run the webhook/dispatch flow by posting a dummy entry:
+   ```bash
+   curl -X POST "${STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL}" \
+     -H "Content-Type: application/json" \
+     -H "X-Scoreboard-Secret: ${STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET}" \
+     -d '{"line":"{\"id\":\"healthcheck\",\"initials\":\"HCK\",\"score\":1}"}'
+   ```
+   or, if you’re using PAT dispatch, call the GitHub API with the sample command from the previous section. A `queued` response (webhook) or HTTP 204 (GitHub API) confirms the request was accepted.
+3. Open GitHub → **Actions → Sync Scoreboard** and wait for the workflow run triggered by the test payload. It should finish green and create a commit touching `scoreboard.jsonl`.
+4. Launch the game with `dotnet run`, finish a quick run (quit immediately if you want), and verify two things:
+   - `tail scoreboard.jsonl` locally shows the new entry.
+   - Another **Sync Scoreboard** workflow run appears and the leaderboard commit includes your entry.
+5. Optional: run `dotnet run -- leaderboard` or `./launch-leaderboard.sh` in a second terminal to watch the shared board update in real time.
+
 #### Shared webhook (no personal PAT required by players)
 If you’d rather keep a single credential on a server you control, expose a simple HTTPS endpoint that accepts the payload and triggers GitHub on behalf of players. Configure that endpoint with the PAT (or GitHub App token) privately, then give players just the webhook URL/secret:
 - `STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL`: HTTPS endpoint that accepts POSTs with the body `{"line":"...","line_b64":"..."}`.

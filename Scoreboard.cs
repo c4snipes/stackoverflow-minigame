@@ -40,12 +40,12 @@ namespace stackoverflow_minigame
             WriteIndented = false,
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
-        private readonly HttpClient? dispatchClient;
-        private readonly Uri? dispatchUri;
-        private readonly string dispatchEventType;
-        private readonly HttpClient? webhookClient;
-        private readonly Uri? webhookUri;
-        private readonly string? webhookSecret;
+        private HttpClient? dispatchClient;
+        private Uri? dispatchUri;
+        private string dispatchEventType = "scoreboard-entry";
+        private HttpClient? webhookClient;
+        private Uri? webhookUri;
+        private string? webhookSecret;
         private static readonly JsonSerializerOptions dispatchJsonOptions = new()
         {
             PropertyNamingPolicy = null,
@@ -350,6 +350,12 @@ namespace stackoverflow_minigame
                 return Directory.Exists(candidate) ? current : null;
             });
 
+        private static string? NormalizeEnvVariable(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            return value.Trim().Trim('"').Trim('\'').Trim();
+        }
+
         private void InitializeDispatchers()
         {
             InitializeGitHubDispatchClient();
@@ -358,9 +364,9 @@ namespace stackoverflow_minigame
 
         private void InitializeGitHubDispatchClient()
         {
-            string? token = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_DISPATCH_TOKEN");
-            string? repo = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_REPO");
-            dispatchEventType = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_DISPATCH_EVENT") ?? "scoreboard-entry";
+            string? token = NormalizeEnvVariable(Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_DISPATCH_TOKEN"));
+            string? repo = NormalizeEnvVariable(Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_REPO"));
+            dispatchEventType = NormalizeEnvVariable(Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_DISPATCH_EVENT")) ?? "scoreboard-entry";
             if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(repo))
             {
                 dispatchClient = null;
@@ -368,7 +374,7 @@ namespace stackoverflow_minigame
                 return;
             }
 
-            string apiBase = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_API_BASE") ?? "https://api.github.com";
+            string apiBase = NormalizeEnvVariable(Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_API_BASE")) ?? "https://api.github.com";
             string trimmedRepo = repo.Trim().Trim('/');
             string trimmedBase = apiBase.TrimEnd('/');
             if (!Uri.TryCreate($"{trimmedBase}/repos/{trimmedRepo}/dispatches", UriKind.Absolute, out Uri? uri))
@@ -388,8 +394,8 @@ namespace stackoverflow_minigame
 
         private void InitializeWebhookClient()
         {
-            string? url = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL");
-            webhookSecret = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET");
+            string? url = NormalizeEnvVariable(Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL"));
+            webhookSecret = NormalizeEnvVariable(Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET"));
             if (string.IsNullOrWhiteSpace(url))
             {
                 webhookClient = null;

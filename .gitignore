@@ -39,7 +39,7 @@ obj/
 # Ignore github instructions file used by tooling
 .github/instructions/codacy.instructions.md
 .codebuddy
-
+.env
 # FAKE build tool artifacts
 .fake
 

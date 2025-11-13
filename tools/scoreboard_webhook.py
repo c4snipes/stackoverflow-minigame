@@ -71,9 +71,9 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"queued")
 
-    def log_message(self, fmt, *args):
+    def log_message(self, format: str, *args: object):
         # Basic stdout logging
-        print("%s - - [%s] %s" % (self.address_string(), self.log_date_time_string(), fmt % args))
+        print("%s - - [%s] %s" % (self.address_string(), self.log_date_time_string(), format % args))
 
     def _authorize(self) -> bool:
         secret = os.environ.get(SECRET_ENV)
@@ -87,10 +87,13 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
 
     def _read_json_body(self):
         length_header = self.headers.get("Content-Length")
+        if length_header is None:
+            self.send_error(HTTPStatus.LENGTH_REQUIRED, "Missing Content-Length header.")
+            return None
         try:
             length = int(length_header)
         except (TypeError, ValueError):
-            self.send_error(HTTPStatus.LENGTH_REQUIRED, "Missing Content-Length header.")
+            self.send_error(HTTPStatus.LENGTH_REQUIRED, "Invalid Content-Length header.")
             return None
 
         raw = self.rfile.read(length)
@@ -109,7 +112,7 @@ def dispatch(encoded_line: str) -> None:
 
     api_base = (os.environ.get(API_ENV) or "https://api.github.com").rstrip("/")
     url = f"{api_base}/repos/{repo.strip('/')}/dispatches"
-    payload = {
+    payload: dict[str, str | dict[str, str]] = {
         "event_type": os.environ.get(EVENT_ENV, "scoreboard-entry"),
         "client_payload": {"line_b64": encoded_line},
     }
