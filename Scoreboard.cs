@@ -2,9 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 
 namespace stackoverflow_minigame
 {
@@ -36,12 +40,24 @@ namespace stackoverflow_minigame
             WriteIndented = false,
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
+        private readonly HttpClient? dispatchClient;
+        private readonly Uri? dispatchUri;
+        private readonly string dispatchEventType;
+        private readonly HttpClient? webhookClient;
+        private readonly Uri? webhookUri;
+        private readonly string? webhookSecret;
+        private static readonly JsonSerializerOptions dispatchJsonOptions = new()
+        {
+            PropertyNamingPolicy = null,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        };
 
         public Scoreboard(string filePath)
         {
             this.filePath = filePath;
             EnsureFileExists();
             ReloadAllEntries();
+            InitializeDispatchers();
         }
 
         public static string ResolveDefaultPath()
@@ -163,6 +179,7 @@ namespace stackoverflow_minigame
                 using StreamWriter writer = new(stream, Encoding.UTF8);
                 writer.WriteLine(payload);
                 lastReadPosition = stream.Position;
+                TryDispatchPayload(payload);
                 return true;
             }
             catch (IOException ex)
@@ -332,5 +349,173 @@ namespace stackoverflow_minigame
                 string candidate = Path.Combine(current, directoryName);
                 return Directory.Exists(candidate) ? current : null;
             });
+
+        private void InitializeDispatchers()
+        {
+            InitializeGitHubDispatchClient();
+            InitializeWebhookClient();
+        }
+
+        private void InitializeGitHubDispatchClient()
+        {
+            string? token = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_DISPATCH_TOKEN");
+            string? repo = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_REPO");
+            dispatchEventType = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_DISPATCH_EVENT") ?? "scoreboard-entry";
+            if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(repo))
+            {
+                dispatchClient = null;
+                dispatchUri = null;
+                return;
+            }
+
+            string apiBase = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_API_BASE") ?? "https://api.github.com";
+            string trimmedRepo = repo.Trim().Trim('/');
+            string trimmedBase = apiBase.TrimEnd('/');
+            if (!Uri.TryCreate($"{trimmedBase}/repos/{trimmedRepo}/dispatches", UriKind.Absolute, out Uri? uri))
+            {
+                dispatchClient = null;
+                dispatchUri = null;
+                Diagnostics.ReportFailure("Invalid GitHub dispatch URI. Check STACKOVERFLOW_SCOREBOARD_API_BASE/REPO.", new UriFormatException());
+                return;
+            }
+
+            dispatchUri = uri;
+            dispatchClient = new HttpClient();
+            dispatchClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+            dispatchClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("stackoverflow-minigame", "1.0"));
+            dispatchClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("token", token.Trim());
+        }
+
+        private void InitializeWebhookClient()
+        {
+            string? url = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL");
+            webhookSecret = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET");
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                webhookClient = null;
+                webhookUri = null;
+                return;
+            }
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
+            {
+                Diagnostics.ReportFailure("Invalid STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL.", new UriFormatException());
+                return;
+            }
+
+            webhookUri = uri;
+            webhookClient = new HttpClient();
+            webhookClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("stackoverflow-minigame", "1.0"));
+        }
+
+        private void TryDispatchPayload(string jsonLine)
+        {
+            string encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(jsonLine));
+            if (dispatchClient != null && dispatchUri != null)
+            {
+                _ = Task.Run(() => DispatchScoreboardEntryAsync(encoded));
+            }
+
+            if (webhookClient != null && webhookUri != null)
+            {
+                _ = Task.Run(() => SendWebhookAsync(encoded, jsonLine));
+            }
+        }
+
+        private async Task DispatchScoreboardEntryAsync(string encodedLine)
+        {
+            if (dispatchClient == null || dispatchUri == null)
+            {
+                return;
+            }
+
+            var request = new DispatchRequest
+            {
+                EventType = dispatchEventType,
+                ClientPayload = new DispatchClientPayload { LineBase64 = encodedLine }
+            };
+
+            string body = JsonSerializer.Serialize(request, dispatchJsonOptions);
+            using StringContent content = new(body, Encoding.UTF8, "application/json");
+            try
+            {
+                HttpResponseMessage response = await dispatchClient.PostAsync(dispatchUri, content).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                {
+                    string responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    Diagnostics.ReportFailure(
+                        $"Scoreboard dispatch failed with {(int)response.StatusCode} {response.ReasonPhrase}.",
+                        new InvalidOperationException(responseBody));
+                }
+            }
+            catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException)
+            {
+                Diagnostics.ReportFailure("Failed to dispatch scoreboard entry to GitHub.", ex);
+            }
+        }
+
+        private sealed class DispatchRequest
+        {
+            [JsonPropertyName("event_type")]
+            public string EventType { get; init; } = "scoreboard-entry";
+
+            [JsonPropertyName("client_payload")]
+            public DispatchClientPayload ClientPayload { get; init; } = new();
+        }
+
+        private sealed class DispatchClientPayload
+        {
+            [JsonPropertyName("line_b64")]
+            public string LineBase64 { get; init; } = string.Empty;
+        }
+
+        private async Task SendWebhookAsync(string encodedLine, string rawLine)
+        {
+            if (webhookClient == null || webhookUri == null)
+            {
+                return;
+            }
+
+            var payload = new WebhookPayload
+            {
+                LineBase64 = encodedLine,
+                Line = rawLine
+            };
+
+            string body = JsonSerializer.Serialize(payload, dispatchJsonOptions);
+            using var request = new HttpRequestMessage(HttpMethod.Post, webhookUri)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json")
+            };
+            if (!string.IsNullOrEmpty(webhookSecret))
+            {
+                request.Headers.Add("X-Scoreboard-Secret", webhookSecret);
+            }
+
+            try
+            {
+                HttpResponseMessage response = await webhookClient.SendAsync(request).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                {
+                    string responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    Diagnostics.ReportFailure(
+                        $"Scoreboard webhook failed with {(int)response.StatusCode} {response.ReasonPhrase}.",
+                        new InvalidOperationException(responseBody));
+                }
+            }
+            catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException)
+            {
+                Diagnostics.ReportFailure("Failed to call scoreboard webhook.", ex);
+            }
+        }
+
+        private sealed class WebhookPayload
+        {
+            [JsonPropertyName("line_b64")]
+            public string LineBase64 { get; init; } = string.Empty;
+
+            [JsonPropertyName("line")]
+            public string Line { get; init; } = string.Empty;
+        }
     }
 }

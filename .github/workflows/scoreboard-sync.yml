@@ -1,0 +1,55 @@
+name: Sync Scoreboard
+
+on:
+  repository_dispatch:
+    types: [scoreboard-entry]
+  workflow_dispatch:
+    inputs:
+      line_b64:
+        description: Base64 encoded scoreboard line to append
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  append:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Append scoreboard entry
+        env:
+          PAYLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.line_b64 || github.event.client_payload.line_b64 }}
+        run: |
+          if [[ -z "$PAYLOAD" ]]; then
+            echo "No payload supplied; skipping append."
+            exit 0
+          fi
+
+          decoded="$(python - <<'PY'
+import base64, os, sys
+payload = os.environ["PAYLOAD"]
+try:
+    text = base64.b64decode(payload).decode("utf-8")
+except Exception as exc:
+    sys.stderr.write(f"Failed to decode payload: {exc}\n")
+    sys.exit(1)
+print(text, end="")
+PY
+)"
+
+          printf '%s\n' "$decoded" >> scoreboard.jsonl
+
+      - name: Commit and push (if needed)
+        run: |
+          if git status --short scoreboard.jsonl | grep -q .; then
+            git config user.name "Scoreboard Bot"
+            git config user.email "scoreboard-bot@users.noreply.github.com"
+            git add scoreboard.jsonl
+            git commit -m "Append scoreboard entry"
+            git push
+          else
+            echo "No scoreboard changes to commit."
+          fi
