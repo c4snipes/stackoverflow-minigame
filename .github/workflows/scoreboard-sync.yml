@@ -15,11 +15,16 @@ permissions:
 jobs:
   append:
     runs-on: ubuntu-latest
+    concurrency:
+      group: scoreboard-sync
+      cancel-in-progress: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Append scoreboard entry
+      - name: Decode and validate payload
         env:
           PAYLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.line_b64 || github.event.client_payload.line_b64 }}
         run: |
@@ -28,25 +33,47 @@ jobs:
             exit 0
           fi
 
-          decoded="$(python - <<'PY'
-import base64, os, sys
+          python - <<EOF
+import base64
+import json
+import os
+import sys
+
 payload = os.environ["PAYLOAD"]
 try:
-    text = base64.b64decode(payload).decode("utf-8")
+    decoded = base64.b64decode(payload).decode("utf-8")
 except Exception as exc:
-    sys.stderr.write(f"Failed to decode payload: {exc}\n")
-    sys.exit(1)
-print(text, end="")
-PY
-)"
+    raise SystemExit(f"Failed to decode payload: {exc}")
 
-          printf '%s\n' "$decoded" >> scoreboard.jsonl
+line = decoded.strip()
+if not line:
+    raise SystemExit("Decoded payload is empty.")
+
+try:
+    json.loads(line)
+except json.JSONDecodeError as exc:
+    raise SystemExit(f"Payload is not valid JSON: {exc}")
+
+with open("decoded_entry.jsonl", "w", encoding="utf-8") as handle:
+    handle.write(line + "\n")
+EOF
+
+      - name: Append scoreboard entry
+        run: |
+          if [[ -f decoded_entry.jsonl ]]; then
+            cat decoded_entry.jsonl >> scoreboard.jsonl
+          else
+            echo "No decoded entry to append. Exiting."
+            exit 0
+          fi
 
       - name: Commit and push (if needed)
         run: |
           if git status --short scoreboard.jsonl | grep -q .; then
             git config user.name "Scoreboard Bot"
             git config user.email "scoreboard-bot@users.noreply.github.com"
+            current_branch="$(git rev-parse --abbrev-ref HEAD)"
+            git pull --rebase origin "$current_branch"
             git add scoreboard.jsonl
             git commit -m "Append scoreboard entry"
             git push

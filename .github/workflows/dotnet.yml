@@ -13,9 +13,19 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
 
     steps:
     - uses: actions/checkout@v4
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:

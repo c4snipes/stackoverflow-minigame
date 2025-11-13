@@ -42,32 +42,23 @@ The project uses a single SDK-style project file `stackoverflow-minigame.csproj`
 ## Automated scoreboard sync (GitHub Actions)
 The workflow in `.github/workflows/scoreboard-sync.yml` appends new entries to `scoreboard.jsonl` whenever a `repository_dispatch` event with the type `scoreboard-entry` is received (or when you trigger the workflow manually through the Actions UI). Each event must include a base64-encoded payload named `line_b64` that contains the exact JSON line you want appended.
 
-### Triggering from a local session
-1. Create a fine-grained Personal Access Token (PAT) with **Repository → Contents: Read/Write** access and store it securely (e.g., `export GITHUB_PAT_SCOREBOARD=...`).
-2. Grab the most recent line after the game appends it locally and send it to GitHub:
-   ```bash
-   line="$(tail -n 1 scoreboard.jsonl)"
-   payload="$(printf '%s' "$line" | base64)"
-   curl -X POST \
-     -H "Authorization: token ${GITHUB_PAT_SCOREBOARD}" \
-     -H "Accept: application/vnd.github+json" \
-     https://api.github.com/repos/<owner>/<repo>/dispatches \
-     -d @<(jq -n --arg data "$payload" '{event_type:"scoreboard-entry",client_payload:{line_b64:$data}}')
-   ```
-   Replace `<owner>/<repo>` with your GitHub path. The workflow will check out `main`, append the line, commit as “Scoreboard Bot,” and push.
+### Choose how to sync
+- **Per-player PAT (direct GitHub dispatch):**
+  1. [Create a fine-grained PAT](https://github.com/settings/tokens?type=beta) with **Repository → Contents: Read/Write** scope.
+  2. Export the variables before running the game:
+     ```bash
+     export STACKOVERFLOW_SCOREBOARD_REPO="colesnipes/stackoverflow-minigame"
+     export STACKOVERFLOW_SCOREBOARD_DISPATCH_TOKEN="ghp_xxx"
+     # optional overrides:
+     # export STACKOVERFLOW_SCOREBOARD_DISPATCH_EVENT="scoreboard-entry"
+     # export STACKOVERFLOW_SCOREBOARD_API_BASE="https://api.github.com"
+     ```
+  3. Each run automatically POSTs to `https://api.github.com/repos/<owner>/<repo>/dispatches`; the workflow appends the row.
+- **Shared webhook (Fly relay, no PAT for players):**
+  1. Copy `.env` to `.env.local`, keep `STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL=https://stackoverflow-minigame.fly.dev/scoreboard` and the shared secret, then load it with `set -a && source .env.local && set +a`.
+  2. When the game finishes, it POSTs the JSON line to the Fly relay. That service calls GitHub with the PAT stored on Fly, so the workflow still commits the entry.
 
-You can also fire the workflow manually from the GitHub Actions tab by choosing **Sync Scoreboard** → **Run workflow** and pasting a base64-encoded line into the `line_b64` input.
-
-### Automatic dispatch from the game
-If you don’t want to run the `curl` helper manually, the game can trigger the workflow whenever it writes a new score. Set the following environment variables before launching the game:
-- `STACKOVERFLOW_SCOREBOARD_REPO`: the `<owner>/<repo>` path on GitHub (for example, `colesnipes/stackoverflow-minigame`).
-- `STACKOVERFLOW_SCOREBOARD_DISPATCH_TOKEN`: a PAT with **Contents: Read/Write** scope that the game can send to GitHub.
-- `STACKOVERFLOW_SCOREBOARD_DISPATCH_EVENT` *(optional)*: overrides the event type sent to GitHub (defaults to `scoreboard-entry`).
-- `STACKOVERFLOW_SCOREBOARD_API_BASE` *(optional)*: custom API base URL if you’re proxying GitHub (defaults to `https://api.github.com`).
-
-When those variables are present, each successful append posts the JSON line (base64-encoded) to GitHub’s `repository_dispatch` endpoint in the background. The `Sync Scoreboard` workflow then appends the same line on GitHub and pushes the change, keeping everyone’s leaderboard in sync.
-
-> Tip: You can copy `.env` to `.env.local`, adjust the values for your environment, then run `set -a && source .env.local && set +a` (bash/zsh) before `dotnet run` so the game picks them up automatically.
+You can still manually trigger the workflow from GitHub Actions → **Sync Scoreboard** → **Run workflow** if you need to re-add a line (base64-encode it first), but day-to-day play is handled by one of the two options above.
 
 ### Verify the end-to-end pipeline
 1. Load your environment variables (PAT-based or webhook-based) with the `set -a && source … && set +a` pattern so the game can see them.

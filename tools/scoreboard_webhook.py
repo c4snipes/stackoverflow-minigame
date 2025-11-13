@@ -17,11 +17,14 @@ Configuration is done through environment variables:
 
 import base64
 import json
+import logging
 import os
 import secrets
 import ssl
+from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Optional
 from urllib import error as urlerror
 from urllib import request as urlrequest
 
@@ -36,10 +39,54 @@ REPO_ENV = "SCOREBOARD_REPO"
 TOKEN_ENV = "SCOREBOARD_GITHUB_TOKEN"
 EVENT_ENV = "SCOREBOARD_EVENT"
 API_ENV = "SCOREBOARD_API_BASE"
+MAX_PAYLOAD_BYTES = 4096
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+LOGGER = logging.getLogger("scoreboard_webhook")
+
+
+@dataclass(frozen=True)
+class Config:
+    repo: str
+    token: str
+    event_type: str
+    api_base: str
+    secret: Optional[str]
+
+
+def _normalize(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    trimmed = value.strip().strip('"').strip("'").strip()
+    return trimmed or None
+
+
+def load_config() -> Config:
+    repo = _normalize(os.environ.get(REPO_ENV))
+    token = _normalize(os.environ.get(TOKEN_ENV))
+    if not repo or not token:
+        raise SystemExit(
+            "SCOREBOARD_REPO and SCOREBOARD_GITHUB_TOKEN must be set before starting the webhook."
+        )
+    event_type = _normalize(os.environ.get(EVENT_ENV)) or "scoreboard-entry"
+    api_base = (_normalize(os.environ.get(API_ENV)) or "https://api.github.com").rstrip("/")
+    secret = _normalize(os.environ.get(SECRET_ENV))
+    return Config(repo=repo, token=token, event_type=event_type, api_base=api_base, secret=secret)
+
+
+CONFIG = load_config()
 
 
 class ScoreboardHandler(BaseHTTPRequestHandler):
     server_version = "ScoreboardWebhook/1.0"
+
+    def do_GET(self):
+        if self.path == "/healthz":
+            self.send_response(HTTPStatus.OK)
+            self.end_headers()
+            self.wfile.write(b"ok")
+            return
+        self.send_error(HTTPStatus.NOT_FOUND, "Unknown path.")
 
     def do_POST(self):
         if self.path != "/scoreboard":
@@ -64,6 +111,7 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
         try:
             dispatch(encoded)
         except RuntimeError as exc:
+            LOGGER.warning("Dispatch failed: %s", exc)
             self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
             return
 
@@ -72,15 +120,13 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"queued")
 
     def log_message(self, format: str, *args: object):
-        # Basic stdout logging
-        print("%s - - [%s] %s" % (self.address_string(), self.log_date_time_string(), format % args))
+        LOGGER.info("%s - - %s", self.address_string(), format % args)
 
     def _authorize(self) -> bool:
-        secret = os.environ.get(SECRET_ENV)
-        if not secret:
+        if CONFIG.secret is None:
             return True
         provided = self.headers.get("X-Scoreboard-Secret", "")
-        if not secrets.compare_digest(provided.strip(), secret.strip()):
+        if not secrets.compare_digest(provided.strip(), CONFIG.secret):
             self.send_error(HTTPStatus.UNAUTHORIZED, "Invalid X-Scoreboard-Secret header.")
             return False
         return True
@@ -96,6 +142,10 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
             self.send_error(HTTPStatus.LENGTH_REQUIRED, "Invalid Content-Length header.")
             return None
 
+        if length <= 0 or length > MAX_PAYLOAD_BYTES:
+            self.send_error(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "Payload too large.")
+            return None
+
         raw = self.rfile.read(length)
         try:
             return json.loads(raw)
@@ -105,21 +155,15 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
 
 
 def dispatch(encoded_line: str) -> None:
-    repo = os.environ.get(REPO_ENV)
-    token = os.environ.get(TOKEN_ENV)
-    if not repo or not token:
-        raise RuntimeError("Server missing SCOREBOARD_REPO or SCOREBOARD_GITHUB_TOKEN env vars.")
-
-    api_base = (os.environ.get(API_ENV) or "https://api.github.com").rstrip("/")
-    url = f"{api_base}/repos/{repo.strip('/')}/dispatches"
+    url = f"{CONFIG.api_base}/repos/{CONFIG.repo.strip('/')}/dispatches"
     payload: dict[str, str | dict[str, str]] = {
-        "event_type": os.environ.get(EVENT_ENV, "scoreboard-entry"),
+        "event_type": CONFIG.event_type,
         "client_payload": {"line_b64": encoded_line},
     }
     body = json.dumps(payload).encode("utf-8")
     req = urlrequest.Request(url, data=body, method="POST")
     req.add_header("Accept", "application/vnd.github+json")
-    req.add_header("Authorization", f"token {token.strip()}")
+    req.add_header("Authorization", f"token {CONFIG.token}")
     req.add_header("Content-Type", "application/json")
     req.add_header("User-Agent", "stackoverflow-minigame-webhook/1.0")
 
@@ -128,8 +172,10 @@ def dispatch(encoded_line: str) -> None:
             resp.read()
     except urlerror.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
+        LOGGER.error("GitHub dispatch failed: %s %s %s", exc.code, exc.reason, detail)
         raise RuntimeError(f"GitHub dispatch failed: {exc.code} {exc.reason} - {detail}") from exc
     except urlerror.URLError as exc:
+        LOGGER.error("Network error while calling GitHub: %s", exc)
         raise RuntimeError(f"Network error while calling GitHub: {exc}") from exc
 
 
@@ -146,17 +192,19 @@ def build_server():
         scheme = "https"
     else:
         scheme = "http"
-        print("WARNING: TLS cert/key not provided; running without HTTPS.")
-    print(f"Listening on {scheme}://{host}:{port}/scoreboard")
+        LOGGER.warning("TLS cert/key not provided; running without HTTPS.")
+    LOGGER.info("Listening on %s://%s:%s/scoreboard", scheme, host, port)
     return httpd
 
 
 def main():
+    LOGGER.info("Loaded configuration: repo=%s event=%s api_base=%s secret=%s",
+                CONFIG.repo, CONFIG.event_type, CONFIG.api_base, "set" if CONFIG.secret else "unset")
     server = build_server()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("Shutting down…")
+        LOGGER.info("Shutting down…")
         server.server_close()
 
 
