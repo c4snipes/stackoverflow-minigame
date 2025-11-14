@@ -58,3 +58,4 @@
 {"id":"b1590f292ab746299946f4fe76e04a5e","initials":"CAS","score":0,"maxAltitude":56.41278,"runTimeTicks":40073943,"victory":false,"timestampUtc":"2025-11-13T21:47:32.628741Z","runTime":"00:00:04.0073943"}
 {"id":"4e4043e033094217b329a6cd4fd3b8aa","initials":"CAS","score":0,"maxAltitude":32.433758,"runTimeTicks":21050206,"victory":false,"timestampUtc":"2025-11-13T21:47:36.991609Z","runTime":"00:00:02.1050206"}
 {"id":"bec4154a2c7b417494ad856a772666dc","initials":"CAS","score":6,"maxAltitude":206.42462,"runTimeTicks":144502163,"victory":false,"timestampUtc":"2025-11-13T21:47:52.122958Z","runTime":"00:00:14.4502163"}
+{"id":"manual","initials":"AAA","score":1}
