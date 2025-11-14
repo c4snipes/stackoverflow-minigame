@@ -41,7 +41,9 @@ jobs:
             git config user.name "Scoreboard Bot"
             git config user.email "scoreboard-bot@users.noreply.github.com"
             current_branch="$(git rev-parse --abbrev-ref HEAD)"
+            git stash --include-untracked
             git pull --rebase origin "$current_branch"
+            git stash pop || true
             git add scoreboard.jsonl
             git commit -m "Append scoreboard entry"
             git push
