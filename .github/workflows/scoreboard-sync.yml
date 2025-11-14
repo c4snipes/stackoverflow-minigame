@@ -24,7 +24,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Decode and validate payload
+      - name: Append scoreboard entry
         env:
           PAYLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.line_b64 || github.event.client_payload.line_b64 }}
         run: |
@@ -33,39 +33,7 @@ jobs:
             exit 0
           fi
 
-          python - <<EOF
-import base64
-import json
-import os
-import sys
-
-payload = os.environ["PAYLOAD"]
-try:
-    decoded = base64.b64decode(payload).decode("utf-8")
-except Exception as exc:
-    raise SystemExit(f"Failed to decode payload: {exc}")
-
-line = decoded.strip()
-if not line:
-    raise SystemExit("Decoded payload is empty.")
-
-try:
-    json.loads(line)
-except json.JSONDecodeError as exc:
-    raise SystemExit(f"Payload is not valid JSON: {exc}")
-
-with open("decoded_entry.jsonl", "w", encoding="utf-8") as handle:
-    handle.write(line + "\n")
-EOF
-
-      - name: Append scoreboard entry
-        run: |
-          if [[ -f decoded_entry.jsonl ]]; then
-            cat decoded_entry.jsonl >> scoreboard.jsonl
-          else
-            echo "No decoded entry to append. Exiting."
-            exit 0
-          fi
+          python tools/append_scoreboard_entry.py
 
       - name: Commit and push (if needed)
         run: |
