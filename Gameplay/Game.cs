@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.Versioning;
 using System.Threading;
 using System.Security;
 
@@ -200,11 +201,21 @@ namespace stackoverflow_minigame
             {
                 Console.Clear();
                 ConsoleSafe.TrySetCursorPosition(0, 0);
-                ConsoleSafe.WriteLine("STACKOVERFLOW SKY CLIMBER");
-                ConsoleSafe.WriteLine("You are a lonely stack frame climbing toward accepted glory.");
-                ConsoleSafe.WriteLine("The backlog towers above—each platform an unanswered question waiting to topple you.");
-                ConsoleSafe.WriteLine("Purge the recursive calls, stabilize the threads, and escape before the pager screams.");
-                ConsoleSafe.WriteLine("Press any key to start recursion (Q/Esc to bail, L to view leaderboard).");
+                ConsoleSafe.WriteLine("╔═══════════════════════════════════════════════════════════════════════╗");
+                ConsoleSafe.WriteLine("║               STACKOVERFLOW: THE STACK CLIMBING GAME                  ║");
+                ConsoleSafe.WriteLine("╚═══════════════════════════════════════════════════════════════════════╝");
+                ConsoleSafe.WriteLine("");
+                ConsoleSafe.WriteLine("🎯 THE LEGEND:");
+                ConsoleSafe.WriteLine("   You are a stack frame in the call stack, climbing toward the limit.");
+                ConsoleSafe.WriteLine("   Each platform represents a function call pushing you higher.");
+                ConsoleSafe.WriteLine("   Your mission: reach the legendary 256th level (2^8 - a byte's worth!)");
+                ConsoleSafe.WriteLine("   without falling and causing a STACK OVERFLOW exception.");
+                ConsoleSafe.WriteLine("");
+                ConsoleSafe.WriteLine("   Jump too deep and you'll overflow. Climb too high and you'll succeed!");
+                ConsoleSafe.WriteLine("   Can you conquer all 256 levels before the stack unwinds?");
+                ConsoleSafe.WriteLine("");
+                ConsoleSafe.WriteLine("Press any key to push onto the stack (Q/Esc to return, L for leaderboard)");
+                ConsoleSafe.WriteLine("");
                 ConsoleSafe.WriteLine(GlyphLibrary.StatusSummary);
                 ConsoleSafe.WriteLine(string.Empty);
             }
@@ -317,13 +328,19 @@ namespace stackoverflow_minigame
                 // Audio feedback for landing
                 if (world.LandedThisFrame)
                 {
-                    TryPlayTone(800, 50); // Mid tone for landing
+                    if (OperatingSystem.IsWindows())
+                    {
+                        TryPlayTone(800, 50); // Mid tone for landing
+                    }
                 }
 
                 if (world.LevelAwardedThisFrame)
                 {
                     framesClimbed += 1;
-                    TryPlayTone(1200, 100); // Higher tone for level up
+                    if (OperatingSystem.IsWindows())
+                    {
+                        TryPlayTone(1200, 100); // Higher tone for level up
+                    }
                 }
 
                 if (world.Player.Y < world.Offset)
@@ -629,7 +646,9 @@ namespace stackoverflow_minigame
             world.SetVisibleRowBudget(playableRows);
         }
 
-        // Plays an audio tone using Console.Beep if supported
+        // Plays an audio tone using Console.Beep if supported (Windows only)
+        // Gracefully falls back to silent operation on unsupported platforms
+        [SupportedOSPlatform("windows")]
         private static void TryPlayTone(int frequency, int duration)
         {
             try
