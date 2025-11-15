@@ -1,0 +1,106 @@
+name: Deploy to Fly.io
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual deployments
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Fly.io
+    runs-on: ubuntu-latest
+
+    # Don't deploy PRs, only main branch
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "❌ ERROR: FLY_API_TOKEN secret not configured!"
+            echo ""
+            echo "To enable auto-deployment, add your Fly.io API token as a repository secret:"
+            echo "1. Go to: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo "2. Click 'New repository secret'"
+            echo "3. Name: FLY_API_TOKEN"
+            echo "4. Value: Your Fly.io API token (get it from: fly auth token)"
+            echo ""
+            exit 1
+          fi
+
+          flyctl deploy --remote-only
+
+      - name: Get deployment URL
+        run: |
+          echo "🚀 Deployment complete!"
+          echo "📍 URL: https://stackoverflow-minigame.fly.dev/"
+          echo "🔍 Monitor: https://fly.io/apps/stackoverflow-minigame/monitoring"
+
+      - name: Wait for deployment to stabilize
+        run: sleep 10
+
+      - name: Smoke test - Health check
+        run: |
+          echo "Testing health endpoint..."
+          for i in {1..5}; do
+            if curl -f https://stackoverflow-minigame.fly.dev/healthz; then
+              echo "✅ Health check passed!"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 5s..."
+            sleep 5
+          done
+
+          echo "❌ Health check failed after 5 attempts"
+          exit 1
+
+      - name: Smoke test - Leaderboard HTML
+        run: |
+          echo "Testing HTML leaderboard..."
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://stackoverflow-minigame.fly.dev/)
+
+          if [ "$response" = "200" ]; then
+            echo "✅ HTML leaderboard is accessible (HTTP $response)"
+          else
+            echo "❌ HTML leaderboard failed (HTTP $response)"
+            exit 1
+          fi
+
+      - name: Smoke test - Leaderboard JSON
+        run: |
+          echo "Testing JSON API..."
+          response=$(curl -s https://stackoverflow-minigame.fly.dev/scoreboard)
+
+          if echo "$response" | jq -e '.topLevels' > /dev/null 2>&1; then
+            echo "✅ JSON API is working correctly"
+            echo "Response preview:"
+            echo "$response" | jq -r '.topLevels[0] // "No scores yet"'
+          else
+            echo "❌ JSON API response is invalid"
+            echo "Response: $response"
+            exit 1
+          fi
+
+      - name: Post-deployment summary
+        if: always()
+        run: |
+          echo "----------------------------------------"
+          echo "Deployment Summary"
+          echo "----------------------------------------"
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Deployed by: ${{ github.actor }}"
+          echo "Live URL: https://stackoverflow-minigame.fly.dev/"
+          echo "----------------------------------------"
