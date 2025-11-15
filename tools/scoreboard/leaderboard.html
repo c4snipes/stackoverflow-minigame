@@ -640,6 +640,120 @@
         display: none;
       }
 
+      /* Time Filter */
+      .time-filter-container {
+        margin: 1.5rem 0;
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.8rem 1rem;
+        background: rgba(0, 40, 0, 0.3);
+        border: 1px solid #003300;
+      }
+
+      .time-filter-container label {
+        color: #00ff41;
+        font-size: 1.1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+
+      .time-filter-select {
+        background: rgba(0, 60, 0, 0.5);
+        border: 1px solid #00ff41;
+        color: #00ff41;
+        padding: 0.5rem 1rem;
+        font-family: 'VT323', monospace;
+        font-size: 1.1rem;
+        cursor: pointer;
+        outline: none;
+        transition: all 0.2s;
+      }
+
+      .time-filter-select:hover {
+        background: rgba(0, 80, 0, 0.7);
+        box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+      }
+
+      .time-filter-select option {
+        background: #0a0a0a;
+        color: #00ff41;
+      }
+
+      /* Stats Dashboard */
+      .stats-dashboard {
+        margin: 2rem 0;
+        padding: 1.5rem;
+        background: rgba(0, 40, 0, 0.3);
+        border: 2px solid #00ff41;
+        box-shadow: inset 0 0 20px rgba(0, 255, 65, 0.1);
+      }
+
+      .stats-title {
+        text-align: center;
+        color: #00ff41;
+        font-size: 1.5rem;
+        margin-bottom: 1.5rem;
+        text-shadow: 0 0 10px #00ff41;
+        letter-spacing: 0.15em;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+      }
+
+      .stat-card {
+        background: rgba(0, 20, 0, 0.5);
+        border: 1px solid #003300;
+        padding: 1rem;
+        text-align: center;
+        transition: all 0.2s;
+      }
+
+      .stat-card:hover {
+        background: rgba(0, 40, 0, 0.7);
+        border-color: #00ff41;
+        box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
+      }
+
+      .stat-label {
+        color: #00aa00;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+
+      .stat-value {
+        color: #00ff41;
+        font-size: 1.8rem;
+        font-weight: bold;
+        text-shadow: 0 0 5px #00ff41;
+      }
+
+      @media (max-width: 768px) {
+        .time-filter-container {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .stats-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .stat-value {
+          font-size: 1.4rem;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .stats-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
       /* QR Code Section */
       .qr-section {
         text-align: center;
@@ -730,6 +844,46 @@
             <button class="clear-btn" onclick="clearSearch()">✕ CLEAR</button>
           </div>
 
+          <div class="time-filter-container">
+            <label for="time-filter">Time Range:</label>
+            <select id="time-filter" class="time-filter-select" onchange="changeTimeFilter()">
+              <option value="">All Time</option>
+              <option value="today">Today</option>
+              <option value="week">This Week</option>
+              <option value="month">This Month</option>
+            </select>
+          </div>
+
+          <div class="stats-dashboard" id="stats-dashboard">
+            <div class="stats-title">[ GLOBAL STATISTICS ]</div>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-label">Total Players</div>
+                <div class="stat-value" id="stat-total-players">-</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Total Runs</div>
+                <div class="stat-value" id="stat-total-runs">-</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Average Level</div>
+                <div class="stat-value" id="stat-avg-level">-</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Record Level</div>
+                <div class="stat-value" id="stat-highest-level">-</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Fastest Time</div>
+                <div class="stat-value" id="stat-fastest-time">-</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">🏆 Top Player</div>
+                <div class="stat-value" id="stat-top-player">-</div>
+              </div>
+            </div>
+          </div>
+
           <div class="section-divider">
             <span class="section-title">[ &nbsp;TOP LEVELS&nbsp; ]</span>
           </div>
@@ -805,11 +959,12 @@
         document.getElementById('loading-overlay').classList.remove('active');
       }
 
-      // Refresh leaderboard data
-      async function refreshLeaderboard() {
+      // Refresh leaderboard data with optional time filter
+      async function refreshLeaderboard(since = null) {
         showLoading();
         try {
-          const response = await fetch('/scoreboard');
+          const url = since ? `/scoreboard?since=${since}` : '/scoreboard';
+          const response = await fetch(url);
           if (!response.ok) throw new Error('Failed to fetch');
 
           const data = await response.json();
@@ -834,6 +989,11 @@
             </tr>
           `);
 
+          // Update global stats
+          if (data.stats) {
+            updateStats(data.stats);
+          }
+
           // Update timestamp
           localStorage.setItem('lastLeaderboardUpdate', Date.now().toString());
           updateTimestamp();
@@ -849,6 +1009,24 @@
         } finally {
           hideLoading();
         }
+      }
+
+      // Update stats dashboard
+      function updateStats(stats) {
+        document.getElementById('stat-total-players').textContent = stats.totalPlayers || 0;
+        document.getElementById('stat-total-runs').textContent = stats.totalRuns || 0;
+        document.getElementById('stat-avg-level').textContent = stats.averageLevel || 0;
+        document.getElementById('stat-highest-level').textContent = stats.highestLevel || 0;
+        document.getElementById('stat-fastest-time').textContent =
+          stats.fastestTimeTicks ? formatDuration(stats.fastestTimeTicks) : '-';
+        document.getElementById('stat-top-player').textContent = stats.topPlayer || 'N/A';
+      }
+
+      // Handle time filter change
+      function changeTimeFilter() {
+        const select = document.getElementById('time-filter');
+        const since = select.value;
+        refreshLeaderboard(since || null);
       }
 
       // Format duration from ticks
