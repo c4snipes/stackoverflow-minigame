@@ -13,11 +13,10 @@ namespace stackoverflow_minigame
     internal class LeaderboardViewer
     {
         private readonly Scoreboard scoreboard;
-        private const int EntriesToDisplay = 8;
+        private const int EntriesToDisplay = 10;
         private const int RefreshIntervalMs = 1000;
         private bool layoutInitialized;
         private int topSectionRow;
-        private int fastestSectionRow;
         private int statsSectionRow;
         private readonly HttpClient? remoteClient;
         private readonly Uri? remoteUri;
@@ -212,22 +211,17 @@ namespace stackoverflow_minigame
                     statsSectionRow = Console.CursorTop;
                     int statsHeight = 4; // Title + 3 lines of stats
                     topSectionRow = statsSectionRow + statsHeight;
-                    int blockHeight = 1 + EntriesToDisplay + 1;
-                    fastestSectionRow = topSectionRow + blockHeight;
                 }
             }
 
             IReadOnlyList<ScoreEntry> topScores = Array.Empty<ScoreEntry>();
-            IReadOnlyList<ScoreEntry> fastest = Array.Empty<ScoreEntry>();
             GlobalStats stats = new GlobalStats();
             string? topError = null;
-            string? fastError = null;
 
             bool remoteSucceeded = TryFetchRemoteLeaderboard(out var remoteTop, out var remoteFast, out var remoteError);
             if (remoteSucceeded)
             {
                 topScores = remoteTop;
-                fastest = remoteFast;
             }
             else
             {
@@ -237,14 +231,7 @@ namespace stackoverflow_minigame
                 }
                 if (!TryFetchScores(() => scoreboard.GetTopScores(EntriesToDisplay, timeFilter), "top scores", out topScores, out topError))
                 {
-                    WriteSection(canPosition, topSectionRow, "Top Levels", Array.Empty<ScoreEntry>(), consoleWidth, topError ?? string.Empty);
-                    Environment.ExitCode = 1;
-                    return false;
-                }
-
-                if (!TryFetchScores(() => scoreboard.GetFastestRuns(EntriesToDisplay, timeFilter), "fastest runs", out fastest, out fastError))
-                {
-                    WriteSection(canPosition, fastestSectionRow, "Fastest Runs", Array.Empty<ScoreEntry>(), consoleWidth, fastError ?? string.Empty);
+                    WriteSection(canPosition, topSectionRow, "Top Scores", Array.Empty<ScoreEntry>(), consoleWidth, topError ?? string.Empty);
                     Environment.ExitCode = 1;
                     return false;
                 }
@@ -256,19 +243,15 @@ namespace stackoverflow_minigame
             if (!layoutInitialized)
             {
                 ConsoleSafe.WriteLine("Global Stats:");
-                ConsoleSafe.WriteLine($"  Players: {stats.TotalPlayers}  |  Runs: {stats.TotalRuns}  |  Avg: {stats.AverageLevel}  |  Record: {stats.HighestLevel}  |  Fastest: {TimeFormatting.FormatDuration(stats.FastestTime)}  |  Top: {stats.TopPlayer}");
+                ConsoleSafe.WriteLine($"  Players: {stats.TotalPlayers}  |  Runs: {stats.TotalRuns}  |  Avg: {stats.AverageLevel}  |  Record: {stats.HighestLevel}  |  Top: {stats.TopPlayer}");
                 ConsoleSafe.WriteLine(string.Empty);
-                ConsoleSafe.WriteLine("Top Levels");
+                ConsoleSafe.WriteLine("Top Scores");
                 RenderSectionLines(topScores, consoleWidth, false);
-                ConsoleSafe.WriteLine(string.Empty);
-                ConsoleSafe.WriteLine("Fastest Runs");
-                RenderSectionLines(fastest, consoleWidth, true);
                 return true;
             }
 
             WriteStatsSection(canPosition, statsSectionRow, stats, consoleWidth);
-            WriteSection(true, topSectionRow, "Top Levels", topScores, consoleWidth, null);
-            WriteSection(true, fastestSectionRow, "Fastest Runs", fastest, consoleWidth, null);
+            WriteSection(true, topSectionRow, "Top Scores", topScores, consoleWidth, null);
             return true;
         }
         // Writes a section of the leaderboard at a specified console position.

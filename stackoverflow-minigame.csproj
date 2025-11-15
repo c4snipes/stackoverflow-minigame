@@ -19,4 +19,8 @@
     <Compile Include="UI/*.cs" />
     <Compile Include="Utils/*.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+  </ItemGroup>
 </Project>

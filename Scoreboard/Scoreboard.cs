@@ -9,6 +9,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 
 namespace stackoverflow_minigame
 {
@@ -43,11 +44,9 @@ namespace stackoverflow_minigame
 
     internal class Scoreboard
     {
-        public const string DefaultFileName = "scoreboard.jsonl";
+        public const string DefaultFileName = "scoreboard.db";
 
-        private readonly string filePath;
-        private readonly List<ScoreEntry> entries = new();
-        private long lastReadPosition;
+        private readonly string dbPath;
         private readonly object sync = new();
         private readonly JsonSerializerOptions jsonOptions = new()
         {
@@ -67,11 +66,10 @@ namespace stackoverflow_minigame
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
-        public Scoreboard(string filePath)
+        public Scoreboard(string dbPath)
         {
-            this.filePath = filePath;
-            EnsureFileExists();
-            ReloadAllEntries();
+            this.dbPath = dbPath;
+            InitializeDatabase();
             InitializeDispatchers();
         }
 
@@ -108,6 +106,35 @@ namespace stackoverflow_minigame
             return null;
         }
 
+        private void InitializeDatabase()
+        {
+            string? directory = Path.GetDirectoryName(dbPath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            using var connection = new SqliteConnection($"Data Source={dbPath}");
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                CREATE TABLE IF NOT EXISTS scores (
+                    id TEXT PRIMARY KEY,
+                    initials TEXT NOT NULL,
+                    level INTEGER NOT NULL,
+                    max_altitude REAL NOT NULL,
+                    run_time_ticks INTEGER NOT NULL,
+                    victory INTEGER NOT NULL,
+                    timestamp_utc TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_level ON scores(level DESC, run_time_ticks ASC);
+                CREATE INDEX IF NOT EXISTS idx_run_time ON scores(run_time_ticks ASC);
+                CREATE INDEX IF NOT EXISTS idx_timestamp ON scores(timestamp_utc);
+            ";
+            command.ExecuteNonQuery();
+        }
+
         public void RecordRun(string initials, int score, float maxAltitude, TimeSpan runTime, bool victory)
         {
             var entry = new ScoreEntry
@@ -137,15 +164,44 @@ namespace stackoverflow_minigame
                 {
                     entry.Id = Guid.NewGuid().ToString("N");
                 }
-                else if (entries.Any(e => e.Id == entry.Id))
-                {
-                    entry.Id = Guid.NewGuid().ToString("N");
-                }
+
                 var storedEntry = entry.Clone();
-                if (TryAppendEntry(storedEntry))
+                if (TryInsertEntry(storedEntry))
                 {
-                    ApplyEntry(storedEntry);
+                    // Dispatch webhook/GitHub event
+                    string payload = JsonSerializer.Serialize(storedEntry, jsonOptions);
+                    TryDispatchPayload(payload);
                 }
+            }
+        }
+
+        private bool TryInsertEntry(ScoreEntry entry)
+        {
+            try
+            {
+                using var connection = new SqliteConnection($"Data Source={dbPath}");
+                connection.Open();
+
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    INSERT OR REPLACE INTO scores (id, initials, level, max_altitude, run_time_ticks, victory, timestamp_utc)
+                    VALUES ($id, $initials, $level, $maxAltitude, $runTimeTicks, $victory, $timestampUtc)
+                ";
+                command.Parameters.AddWithValue("$id", entry.Id);
+                command.Parameters.AddWithValue("$initials", entry.Initials);
+                command.Parameters.AddWithValue("$level", entry.Level);
+                command.Parameters.AddWithValue("$maxAltitude", entry.MaxAltitude);
+                command.Parameters.AddWithValue("$runTimeTicks", entry.RunTimeTicks);
+                command.Parameters.AddWithValue("$victory", entry.Victory ? 1 : 0);
+                command.Parameters.AddWithValue("$timestampUtc", entry.TimestampUtc.ToString("O"));
+
+                command.ExecuteNonQuery();
+                return true;
+            }
+            catch (SqliteException ex)
+            {
+                Diagnostics.ReportFailure("Failed to insert scoreboard entry.", ex);
+                return false;
             }
         }
 
@@ -153,13 +209,7 @@ namespace stackoverflow_minigame
         {
             lock (sync)
             {
-                var snapshot = RefreshEntriesFromDisk();
-                return snapshot
-                    .OrderByDescending(e => e.Level)
-                    .ThenBy(e => e.RunTimeTicks)
-                    .Take(count)
-                    .Select(e => e.Clone())
-                    .ToList();
+                return GetTopScores(count, null);
             }
         }
 
@@ -167,14 +217,7 @@ namespace stackoverflow_minigame
         {
             lock (sync)
             {
-                var snapshot = RefreshEntriesFromDisk();
-                return snapshot
-                    .Where(e => e.RunTimeTicks > 0 && e.Level > 0)
-                    .OrderBy(e => e.RunTimeTicks)
-                    .ThenByDescending(e => e.Level)
-                    .Take(count)
-                    .Select(e => e.Clone())
-                    .ToList();
+                return GetFastestRuns(count, null);
             }
         }
 
@@ -182,16 +225,41 @@ namespace stackoverflow_minigame
         {
             lock (sync)
             {
-                var snapshot = RefreshEntriesFromDisk();
-                var filtered = since.HasValue
-                    ? snapshot.Where(e => e.TimestampUtc >= since.Value)
-                    : snapshot;
-                return filtered
-                    .OrderByDescending(e => e.Level)
-                    .ThenBy(e => e.RunTimeTicks)
-                    .Take(count)
-                    .Select(e => e.Clone())
-                    .ToList();
+                try
+                {
+                    using var connection = new SqliteConnection($"Data Source={dbPath}");
+                    connection.Open();
+
+                    using var command = connection.CreateCommand();
+                    if (since.HasValue)
+                    {
+                        command.CommandText = @"
+                            SELECT id, initials, level, max_altitude, run_time_ticks, victory, timestamp_utc
+                            FROM scores
+                            WHERE timestamp_utc >= $since
+                            ORDER BY level DESC, run_time_ticks ASC
+                            LIMIT $count
+                        ";
+                        command.Parameters.AddWithValue("$since", since.Value.ToString("O"));
+                    }
+                    else
+                    {
+                        command.CommandText = @"
+                            SELECT id, initials, level, max_altitude, run_time_ticks, victory, timestamp_utc
+                            FROM scores
+                            ORDER BY level DESC, run_time_ticks ASC
+                            LIMIT $count
+                        ";
+                    }
+                    command.Parameters.AddWithValue("$count", count);
+
+                    return ReadEntries(command);
+                }
+                catch (SqliteException ex)
+                {
+                    Diagnostics.ReportFailure("Failed to get top scores.", ex);
+                    return new List<ScoreEntry>();
+                }
             }
         }
 
@@ -199,17 +267,42 @@ namespace stackoverflow_minigame
         {
             lock (sync)
             {
-                var snapshot = RefreshEntriesFromDisk();
-                var filtered = since.HasValue
-                    ? snapshot.Where(e => e.TimestampUtc >= since.Value)
-                    : snapshot;
-                return filtered
-                    .Where(e => e.RunTimeTicks > 0 && e.Level > 0)
-                    .OrderBy(e => e.RunTimeTicks)
-                    .ThenByDescending(e => e.Level)
-                    .Take(count)
-                    .Select(e => e.Clone())
-                    .ToList();
+                try
+                {
+                    using var connection = new SqliteConnection($"Data Source={dbPath}");
+                    connection.Open();
+
+                    using var command = connection.CreateCommand();
+                    if (since.HasValue)
+                    {
+                        command.CommandText = @"
+                            SELECT id, initials, level, max_altitude, run_time_ticks, victory, timestamp_utc
+                            FROM scores
+                            WHERE run_time_ticks > 0 AND level > 0 AND timestamp_utc >= $since
+                            ORDER BY run_time_ticks ASC, level DESC
+                            LIMIT $count
+                        ";
+                        command.Parameters.AddWithValue("$since", since.Value.ToString("O"));
+                    }
+                    else
+                    {
+                        command.CommandText = @"
+                            SELECT id, initials, level, max_altitude, run_time_ticks, victory, timestamp_utc
+                            FROM scores
+                            WHERE run_time_ticks > 0 AND level > 0
+                            ORDER BY run_time_ticks ASC, level DESC
+                            LIMIT $count
+                        ";
+                    }
+                    command.Parameters.AddWithValue("$count", count);
+
+                    return ReadEntries(command);
+                }
+                catch (SqliteException ex)
+                {
+                    Diagnostics.ReportFailure("Failed to get fastest runs.", ex);
+                    return new List<ScoreEntry>();
+                }
             }
         }
 
@@ -217,225 +310,136 @@ namespace stackoverflow_minigame
         {
             lock (sync)
             {
-                var snapshot = RefreshEntriesFromDisk();
-                var filtered = since.HasValue
-                    ? snapshot.Where(e => e.TimestampUtc >= since.Value).ToList()
-                    : snapshot;
-
-                if (filtered.Count == 0)
+                try
                 {
+                    using var connection = new SqliteConnection($"Data Source={dbPath}");
+                    connection.Open();
+
+                    using var command = connection.CreateCommand();
+                    if (since.HasValue)
+                    {
+                        command.CommandText = @"
+                            SELECT
+                                COUNT(DISTINCT initials) as total_players,
+                                COUNT(*) as total_runs,
+                                CAST(AVG(level) AS INTEGER) as average_level,
+                                MAX(level) as highest_level,
+                                MIN(CASE WHEN run_time_ticks > 0 THEN run_time_ticks END) as fastest_time
+                            FROM scores
+                            WHERE timestamp_utc >= $since
+                        ";
+                        command.Parameters.AddWithValue("$since", since.Value.ToString("O"));
+                    }
+                    else
+                    {
+                        command.CommandText = @"
+                            SELECT
+                                COUNT(DISTINCT initials) as total_players,
+                                COUNT(*) as total_runs,
+                                CAST(AVG(level) AS INTEGER) as average_level,
+                                MAX(level) as highest_level,
+                                MIN(CASE WHEN run_time_ticks > 0 THEN run_time_ticks END) as fastest_time
+                            FROM scores
+                        ";
+                    }
+
+                    using var reader = command.ExecuteReader();
+                    if (reader.Read())
+                    {
+                        var stats = new GlobalStats
+                        {
+                            TotalPlayers = reader.GetInt32(0),
+                            TotalRuns = reader.GetInt32(1),
+                            AverageLevel = reader.IsDBNull(2) ? 0 : reader.GetInt32(2),
+                            HighestLevel = reader.IsDBNull(3) ? 0 : reader.GetInt32(3),
+                            FastestTimeTicks = reader.IsDBNull(4) ? 0 : reader.GetInt64(4)
+                        };
+
+                        // Get top player
+                        using var topCommand = connection.CreateCommand();
+                        if (since.HasValue)
+                        {
+                            topCommand.CommandText = @"
+                                SELECT initials
+                                FROM scores
+                                WHERE timestamp_utc >= $since
+                                GROUP BY initials
+                                ORDER BY MAX(level) DESC
+                                LIMIT 1
+                            ";
+                            topCommand.Parameters.AddWithValue("$since", since.Value.ToString("O"));
+                        }
+                        else
+                        {
+                            topCommand.CommandText = @"
+                                SELECT initials
+                                FROM scores
+                                GROUP BY initials
+                                ORDER BY MAX(level) DESC
+                                LIMIT 1
+                            ";
+                        }
+                        var topResult = topCommand.ExecuteScalar();
+                        stats.TopPlayer = topResult?.ToString() ?? "N/A";
+
+                        // Get fastest player
+                        using var fastestCommand = connection.CreateCommand();
+                        if (since.HasValue)
+                        {
+                            fastestCommand.CommandText = @"
+                                SELECT initials
+                                FROM scores
+                                WHERE run_time_ticks > 0 AND timestamp_utc >= $since
+                                ORDER BY run_time_ticks ASC
+                                LIMIT 1
+                            ";
+                            fastestCommand.Parameters.AddWithValue("$since", since.Value.ToString("O"));
+                        }
+                        else
+                        {
+                            fastestCommand.CommandText = @"
+                                SELECT initials
+                                FROM scores
+                                WHERE run_time_ticks > 0
+                                ORDER BY run_time_ticks ASC
+                                LIMIT 1
+                            ";
+                        }
+                        var fastestResult = fastestCommand.ExecuteScalar();
+                        stats.FastestPlayer = fastestResult?.ToString() ?? "N/A";
+
+                        return stats;
+                    }
+
                     return new GlobalStats();
                 }
-
-                var uniquePlayers = filtered.Select(e => e.Initials).Distinct().Count();
-                var totalRuns = filtered.Count;
-                var averageLevel = (int)Math.Round(filtered.Average(e => e.Level));
-                var highestLevel = filtered.Max(e => e.Level);
-                var fastestTime = filtered.Where(e => e.RunTimeTicks > 0).Any()
-                    ? filtered.Where(e => e.RunTimeTicks > 0).Min(e => e.RunTimeTicks)
-                    : 0;
-                var topPlayer = filtered
-                    .GroupBy(e => e.Initials)
-                    .OrderByDescending(g => g.Max(e => e.Level))
-                    .FirstOrDefault()?.Key ?? "N/A";
-                var fastestPlayer = filtered
-                    .Where(e => e.RunTimeTicks > 0)
-                    .OrderBy(e => e.RunTimeTicks)
-                    .FirstOrDefault()?.Initials ?? "N/A";
-
-                return new GlobalStats
+                catch (SqliteException ex)
                 {
-                    TotalPlayers = uniquePlayers,
-                    TotalRuns = totalRuns,
-                    AverageLevel = averageLevel,
-                    HighestLevel = highestLevel,
-                    FastestTimeTicks = fastestTime,
-                    TopPlayer = topPlayer,
-                    FastestPlayer = fastestPlayer
+                    Diagnostics.ReportFailure("Failed to get global stats.", ex);
+                    return new GlobalStats();
+                }
+            }
+        }
+
+        private List<ScoreEntry> ReadEntries(SqliteCommand command)
+        {
+            var entries = new List<ScoreEntry>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var entry = new ScoreEntry
+                {
+                    Id = reader.GetString(0),
+                    Initials = reader.GetString(1),
+                    Level = reader.GetInt32(2),
+                    MaxAltitude = reader.GetFloat(3),
+                    RunTimeTicks = reader.GetInt64(4),
+                    Victory = reader.GetInt32(5) != 0,
+                    TimestampUtc = DateTime.Parse(reader.GetString(6)).ToUniversalTime()
                 };
-            }
-        }
-
-        private void EnsureFileExists()
-        {
-            string? directory = Path.GetDirectoryName(filePath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-            if (!File.Exists(filePath))
-            {
-                using FileStream _ = File.Create(filePath);
-            }
-        }
-
-        private bool TryAppendEntry(ScoreEntry entry)
-        {
-            string payload = JsonSerializer.Serialize(entry, jsonOptions);
-            try
-            {
-                using FileStream stream = new(filePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-                using StreamWriter writer = new(stream, Encoding.UTF8);
-                writer.WriteLine(payload);
-                lastReadPosition = stream.Position;
-                TryDispatchPayload(payload);
-                return true;
-            }
-            catch (IOException ex)
-            {
-                Diagnostics.ReportFailure("Failed to append scoreboard entry.", ex);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                Diagnostics.ReportFailure("Scoreboard file is not writable.", ex);
-            }
-            return false;
-        }
-
-        private List<ScoreEntry> RefreshEntriesFromDisk()
-        {
-            ReadIncrementalEntries();
-            return entries;
-        }
-
-        private void ReadIncrementalEntries()
-        {
-            EnsureFileExists();
-            FileInfo info = new(filePath);
-            long currentLength = info.Exists ? info.Length : 0;
-            if (currentLength == 0)
-            {
-                entries.Clear();
-                lastReadPosition = 0;
-                return;
-            }
-
-            if (currentLength < lastReadPosition)
-            {
-                ReloadAllEntries();
-                return;
-            }
-
-            if (currentLength == lastReadPosition)
-            {
-                return;
-            }
-
-            try
-            {
-                using FileStream stream = new(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                stream.Seek(lastReadPosition, SeekOrigin.Begin);
-                using StreamReader reader = new(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
-                string? line;
-                while ((line = reader.ReadLine()) != null)
-                {
-                    if (IsConflictMarker(line))
-                    {
-                        continue;
-                    }
-
-                    ScoreEntry? parsed = ParseLine(line);
-                    if (parsed == null || string.IsNullOrWhiteSpace(parsed.Id))
-                    {
-                        continue;
-                    }
-
-                    ApplyEntry(parsed);
-                }
-                reader.DiscardBufferedData();
-                lastReadPosition = stream.Seek(0, SeekOrigin.Current);
-            }
-            catch (IOException ex)
-            {
-                Diagnostics.ReportFailure("Failed to read incremental scoreboard entries.", ex);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                Diagnostics.ReportFailure("Scoreboard file is not readable.", ex);
-            }
-        }
-
-        private void ReloadAllEntries()
-        {
-            entries.Clear();
-            try
-            {
-                foreach (string line in File.ReadLines(filePath))
-                {
-                    if (IsConflictMarker(line))
-                    {
-                        continue;
-                    }
-
-                    ScoreEntry? parsed = ParseLine(line);
-                    if (parsed == null || string.IsNullOrWhiteSpace(parsed.Id))
-                    {
-                        continue;
-                    }
-
-                    ApplyEntry(parsed);
-                }
-                FileInfo info = new(filePath);
-                lastReadPosition = info.Exists ? info.Length : 0;
-            }
-            catch (IOException ex)
-            {
-                Diagnostics.ReportFailure("Failed to reload scoreboard from disk.", ex);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                Diagnostics.ReportFailure("Scoreboard file is not readable.", ex);
-            }
-        }
-
-        private void ApplyEntry(ScoreEntry entry)
-        {
-            int existingIndex = entries.FindIndex(e => e.Id == entry.Id);
-            if (existingIndex >= 0)
-            {
-                entries[existingIndex] = entry;
-            }
-            else
-            {
                 entries.Add(entry);
             }
-        }
-
-        private ScoreEntry? ParseLine(string line)
-        {
-            string trimmed = line.Trim();
-            if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#"))
-            {
-                return null;
-            }
-
-            try
-            {
-                return JsonSerializer.Deserialize<ScoreEntry>(trimmed, jsonOptions);
-            }
-            catch (JsonException ex)
-            {
-                Diagnostics.ReportFailure("Failed to parse scoreboard entry.", ex);
-                LogCorruptLine(line);
-                return null;
-            }
-        }
-
-        private static bool IsConflictMarker(string line) =>
-            line.StartsWith("<<<<<<<") || line.StartsWith("=======") || line.StartsWith(">>>>>>>");
-
-        private void LogCorruptLine(string line)
-        {
-            try
-            {
-                string corruptPath = filePath + ".corrupt";
-                using StreamWriter writer = new(corruptPath, append: true, Encoding.UTF8);
-                writer.WriteLine(line);
-            }
-            catch (IOException ex)
-            {
-                Diagnostics.ReportFailure("Failed to log corrupt scoreboard entry.", ex);
-            }
+            return entries;
         }
 
         private static string? WalkUpwards(string start, Func<string, string?> evaluator)

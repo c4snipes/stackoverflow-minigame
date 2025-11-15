@@ -36,6 +36,7 @@ namespace stackoverflow_minigame
         private bool initialsConfirmed = false;
         private enum HudMode { Full, Compact, Hidden }
         private HudMode hudMode = HudMode.Full;
+        private bool isFirstRun = true;
 
         // Initials-entry callbacks so callers can monitor ASCII conversion state.
         public event Action? InitialsPromptStarted;
@@ -233,7 +234,34 @@ namespace stackoverflow_minigame
                 return;
             }
 
-            ShowCountdown();
+            // Only show countdown on first run, skip on restarts
+            if (isFirstRun)
+            {
+                ShowCountdown();
+                isFirstRun = false;
+            }
+            else
+            {
+                // Quick "GO!" message for restarts
+                try
+                {
+                    Console.Clear();
+                    int centerRow = Console.WindowHeight / 2;
+                    int centerCol = Console.WindowWidth / 2;
+
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    ConsoleSafe.TrySetCursorPosition(0, centerRow);
+                    ConsoleSafe.WriteLine($"{new string(' ', Math.Max(0, centerCol - 2))}GO!".PadRight(Console.WindowWidth));
+                    Console.ResetColor();
+
+                    TryPlayTone(1000, 150);
+                    Thread.Sleep(300);
+                }
+                catch
+                {
+                    // Silently continue if display fails
+                }
+            }
 
             state = GameState.Running;
             framesClimbed = 0;

@@ -46,6 +46,13 @@ tools/scoreboard/__pycache__
 .codebuddy
 .env
 
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
 # PDF documentation
 .project3_CSharp_Console_2025F.pdf
 *.log
@@ -92,4 +99,4 @@ launch-demo.command
 PRESENTATION-SETUP.md
 create-launcher-app.sh
 Launch Demo.app
-CODE_QUALITY_REPORT.md 
+CODE_QUALITY_REPORT.md

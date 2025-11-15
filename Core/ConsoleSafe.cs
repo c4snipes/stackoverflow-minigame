@@ -83,20 +83,20 @@ namespace stackoverflow_minigame
         {
             if (left < 0 || top < 0)
             {
-                Diagnostics.ReportFailure($"Rejected cursor move to negative coordinate ({left}, {top}).");
+                // Silently reject negative coordinates - this is expected in some corner cases
                 return false;
             }
 
             int width = GetBufferWidth(-1);
             if (width >= 0 && left >= width)
             {
-                Diagnostics.ReportFailure($"Rejected cursor move beyond buffer width (left={left}, width={width}).");
+                // Silently reject out-of-bounds moves - terminal is too small
                 return false;
             }
             int height = GetBufferHeight(-1);
             if (height >= 0 && top >= height)
             {
-                Diagnostics.ReportFailure($"Rejected cursor move beyond buffer height (top={top}, height={height}).");
+                // Silently reject out-of-bounds moves - terminal is too small
                 return false;
             }
 
@@ -114,7 +114,7 @@ namespace stackoverflow_minigame
             }
             catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or SecurityException or PlatformNotSupportedException)
             {
-                Diagnostics.ReportFailure($"Failed to set cursor position to ({left}, {top}).", ex);
+                // Silently fail for cursor positioning errors - common when terminal is constrained
                 return false;
             }
         }
