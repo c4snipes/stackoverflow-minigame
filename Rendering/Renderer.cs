@@ -2,7 +2,7 @@ using System;
 
 namespace stackoverflow_minigame
 {
-    class Renderer
+    internal class Renderer
     {
         // Number of rows reserved for HUD display at the top of the frame.
         public const int HudRows = 3;
@@ -50,7 +50,7 @@ namespace stackoverflow_minigame
             frameWidth = Math.Max(0, interiorWidth) + BorderThickness * 2;
 
             int availableWorldHeight = Math.Max(0, consoleHeight - HudRows - BorderThickness * 2);
-            worldRenderHeight = Math.Min(world.Height, availableWorldHeight);
+            worldRenderHeight = Math.Max(0, Math.Min(world.Height, availableWorldHeight));
             frameHeight = HudRows + BorderThickness * 2 + worldRenderHeight;
 
             interiorLeft = BorderThickness;
@@ -66,7 +66,10 @@ namespace stackoverflow_minigame
                 Array.Fill(frameBuffer, ' ');
             }
 
-            DrawBorders();
+            if (frameWidth > 0 && frameHeight > 0)
+            {
+                DrawBorders();
+            }
 
             frameReady = frameWidth > 0 && frameHeight > 0;
             if (!frameReady)
@@ -127,7 +130,7 @@ namespace stackoverflow_minigame
             {
                 return;
             }
-// Calculate padding for any extra console width beyond the frame width.
+            // Calculate padding for any extra console width beyond the frame width.
             int padding = Math.Max(0, consoleWidth - columnsToWrite);
             ConsoleColor originalColor;
             try
@@ -149,7 +152,15 @@ namespace stackoverflow_minigame
                 if (padding > 0)
                 {
                     EnsurePaddingBuffer(padding);
-                    Console.Out.Write(paddingBuffer, 0, padding);
+                    try
+                    {
+                        Console.Out.Write(paddingBuffer, 0, padding);
+                    }
+                    catch (Exception ex)
+                    {
+                        Diagnostics.ReportFailure("Failed to write padding buffer.", ex);
+                        break;
+                    }
                 }
             }
             try
@@ -163,7 +174,7 @@ namespace stackoverflow_minigame
 
             frameReady = false;
         }
-// Updates the world state for the next frame, including player position and platform lifecycle management.
+        // Updates the world state for the next frame, including player position and platform lifecycle management.
         private void EnsureBufferSize()
         {
             int required = frameWidth * frameHeight;
@@ -220,15 +231,22 @@ namespace stackoverflow_minigame
                 frameBuffer[index] = entity.Symbol;
             }
         }
-// Draws a horizontal span of a platform at the specified row and starting X position.
+        // Draws a horizontal span of a platform at the specified row and starting X position.
         private void DrawPlatformSpan(int row, int startX, int length, char symbol)
         {
-            if (length <= 0) return;
+            if (length <= 0)
+            {
+                return;
+            }
+
             int absoluteStart = startX;
             int absoluteEnd = absoluteStart + length - 1;
             int clampedStart = Math.Max(interiorLeft, absoluteStart);
             int clampedEnd = Math.Min(interiorRight, absoluteEnd);
-            if (clampedStart > clampedEnd) return;
+            if (clampedStart > clampedEnd)
+            {
+                return;
+            }
 
             int rowOffset = row * frameWidth + clampedStart;
             for (int column = clampedStart; column <= clampedEnd; column++)
@@ -243,7 +261,10 @@ namespace stackoverflow_minigame
         // Draws the borders around the playfield area.
         private void DrawBorders()
         {
-            if (frameBuffer.Length == 0 || frameWidth <= 0) return;
+            if (frameBuffer.Length == 0 || frameWidth <= 0 || frameHeight <= 0)
+            {
+                return;
+            }
 
             int playfieldTop = HudRows;
             int bottomBorderStartRow = frameHeight - BorderThickness;
@@ -262,22 +283,42 @@ namespace stackoverflow_minigame
 
         private void DrawHorizontalBorderRow(int row)
         {
-            if (row < 0 || row >= frameHeight) return;
+            if (row < 0 || row >= frameHeight)
+            {
+                return;
+            }
+
             int rowBase = row * frameWidth;
-            if (frameWidth <= 0) return;
+            if (frameWidth <= 0)
+            {
+                return;
+            }
+
             frameBuffer[rowBase] = BorderCornerChar;
-            if (frameWidth == 1) return;
+            if (frameWidth == 1)
+            {
+                return;
+            }
+
             for (int column = 1; column < frameWidth - 1; column++)
             {
                 frameBuffer[rowBase + column] = BorderHorizontalChar;
             }
             frameBuffer[rowBase + frameWidth - 1] = BorderCornerChar;
         }
-// Draws the vertical border columns for a specific row.
+        // Draws the vertical border columns for a specific row.
         private void DrawVerticalBorderColumns(int row)
         {
-            if (row < 0 || row >= frameHeight) return;
-            if (frameWidth <= 0) return;
+            if (row < 0 || row >= frameHeight)
+            {
+                return;
+            }
+
+            if (frameWidth <= 0)
+            {
+                return;
+            }
+
             int leftIndex = row * frameWidth;
             frameBuffer[leftIndex] = BorderVerticalChar;
             frameBuffer[leftIndex + frameWidth - 1] = BorderVerticalChar;
@@ -304,7 +345,15 @@ namespace stackoverflow_minigame
                 {
                     // ignore color failures
                 }
-                Console.Out.Write(frameBuffer, rowStart + processed, length);
+                try
+                {
+                    Console.Out.Write(frameBuffer, rowStart + processed, length);
+                }
+                catch (Exception ex)
+                {
+                    Diagnostics.ReportFailure("Failed to write frame buffer to console.", ex);
+                    break;
+                }
                 processed += length;
             }
             try

@@ -7,6 +7,7 @@ import secrets
 import sqlite3
 import time
 import uuid
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -71,6 +72,46 @@ def load_config() -> Config:
 
 
 CONFIG = load_config()
+
+# Simple rate limiter for bot protection
+class RateLimiter:
+    def __init__(self, max_requests: int = 60, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests: Dict[str, list[float]] = defaultdict(list)
+
+    def is_allowed(self, client_ip: str) -> bool:
+        now = time.time()
+        cutoff = now - self.window_seconds
+
+        # Clean old requests
+        self.requests[client_ip] = [
+            timestamp for timestamp in self.requests[client_ip]
+            if timestamp > cutoff
+        ]
+
+        # Check if limit exceeded
+        if len(self.requests[client_ip]) >= self.max_requests:
+            return False
+
+        # Add current request
+        self.requests[client_ip].append(now)
+        return True
+
+    def cleanup_old_entries(self):
+        """Periodically clean up old IP entries to prevent memory buildup"""
+        now = time.time()
+        cutoff = now - (self.window_seconds * 2)
+
+        for ip in list(self.requests.keys()):
+            self.requests[ip] = [
+                timestamp for timestamp in self.requests[ip]
+                if timestamp > cutoff
+            ]
+            if not self.requests[ip]:
+                del self.requests[ip]
+
+RATE_LIMITER = RateLimiter(max_requests=60, window_seconds=60)
 
 
 class ScoreEntryDict(TypedDict):
@@ -259,7 +300,23 @@ def _to_bool(value: object) -> bool:
 class ScoreboardHandler(BaseHTTPRequestHandler):
     server_version = "ScoreboardWebhook/1.0"
 
+    def _check_rate_limit(self) -> bool:
+        """Check if client is rate limited. Returns True if allowed."""
+        client_ip = self.client_address[0]
+
+        if not RATE_LIMITER.is_allowed(client_ip):
+            LOGGER.warning("Rate limit exceeded for IP: %s", client_ip)
+            self.send_error(
+                HTTPStatus.TOO_MANY_REQUESTS,
+                "Rate limit exceeded. Please try again later."
+            )
+            return False
+        return True
+
     def do_GET(self):
+        if not self._check_rate_limit():
+            return
+
         parsed = urlparse.urlparse(self.path)
         if parsed.path == "/healthz":
             self.send_response(HTTPStatus.OK)
@@ -279,6 +336,9 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND, "Unknown path.")
 
     def do_POST(self):
+        if not self._check_rate_limit():
+            return
+
         if self.path != "/scoreboard":
             self.send_error(HTTPStatus.NOT_FOUND, "Unknown path.")
             return
@@ -364,8 +424,8 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
     def _write_html(self, payload: Dict[str, object]) -> None:
         top_entries = cast(Iterable[EntryMapping], payload.get("topLevels", []))
         fast_entries = cast(Iterable[EntryMapping], payload.get("fastestRuns", []))
-        top_html = self._render_table(top_entries, show_levels=True)
-        fast_html = self._render_table(fast_entries, show_levels=False)
+        top_html = self._render_table(top_entries, show_levels=True, tbody_id="top-levels-body")
+        fast_html = self._render_table(fast_entries, show_levels=False, tbody_id="fastest-runs-body")
         document = (
             HTML_TEMPLATE
             .replace("{{TOP_LEVELS}}", top_html, 1)
@@ -380,18 +440,20 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _render_table(
-        entries: Iterable[EntryMapping], show_levels: bool
+        entries: Iterable[EntryMapping], show_levels: bool, tbody_id: str = ""
     ) -> str:
         if not entries:
             return "<p>No runs recorded yet.</p>"
         header_main = "<th>Levels</th>" if show_levels else "<th>Run Time</th>"
         header_aux = "<th>Run Time</th>" if show_levels else "<th>Levels</th>"
+        tbody_tag = f'<tbody id="{tbody_id}">' if tbody_id else "<tbody>"
         rows = [
             "<table>",
             "<thead><tr><th>#</th><th>Initials</th>",
             header_main,
             header_aux,
-            "</tr></thead><tbody>"
+            "</tr></thead>",
+            tbody_tag
         ]
         for idx, entry in enumerate(entries, start=1):
             initials_raw = str(entry.get("initials", "???"))
@@ -516,9 +578,24 @@ def main():
     LOGGER.info("Loaded configuration: repo=%s event=%s api_base=%s secret=%s",
                 CONFIG.repo, CONFIG.event_type, CONFIG.api_base, "set" if CONFIG.secret else "unset")
     LOGGER.info("Using SQLite database at %s", REPOSITORY.path)
+    LOGGER.info("Rate limiting enabled: %d requests per %d seconds per IP",
+                RATE_LIMITER.max_requests, RATE_LIMITER.window_seconds)
     server = build_server()
+
+    # Periodically clean up rate limiter
+    last_cleanup = time.time()
+    cleanup_interval = 300  # 5 minutes
+
     try:
-        server.serve_forever()
+        LOGGER.info("Server started - press Ctrl+C to stop")
+        while True:
+            server.handle_request()
+
+            # Cleanup rate limiter periodically
+            now = time.time()
+            if now - last_cleanup > cleanup_interval:
+                RATE_LIMITER.cleanup_old_entries()
+                last_cleanup = now
     except KeyboardInterrupt:
         LOGGER.info("Shutting down…")
         server.server_close()

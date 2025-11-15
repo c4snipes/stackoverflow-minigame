@@ -5,13 +5,7 @@ using System.Collections.Generic;
 namespace stackoverflow_minigame
 {
     /// <summary>
-    /// Provides access to glyph representations for characters used in the game. 
-    /// Glyphs are defined as 5x5 pixel art and can be retrieved for rendering
-    /// purposes. The library includes a fallback mechanism for missing glyphs
-    /// Provides access to glyph representations for characters used in the game.
-    /// Glyphs are defined as 5x5 pixel art and can be retrieved for rendering
-    /// purposes. The library includes a fallback mechanism for missing glyphs
-    /// that substitutes a space glyph and triggers instrumentation events.
+    /// Provides access to 5x5 glyph art for characters used in the game, with caching and fallback instrumentation.
     /// </summary>
     internal static class GlyphLibrary
     {
@@ -32,6 +26,7 @@ namespace stackoverflow_minigame
         private static readonly ConcurrentDictionary<char, string[]> GlyphCache = new();
         private static readonly ConcurrentDictionary<char, byte> FallbackWarnedGlyphs = new();
         private static bool loadStatusReported;
+        public static string StatusSummary { get; private set; } = "[GlyphLibrary] Glyph inventory pending...";
 
         static GlyphLibrary()
         {
@@ -79,17 +74,21 @@ namespace stackoverflow_minigame
 
             return glyph;
         }
-        // Determines if any glyph lookup instrumentation is subscribed. 
+        // Determines if any glyph lookup instrumentation is subscribed.
         private static bool HasGlyphInstrumentation =>
             GlyphLookupStarted != null || GlyphLookupSucceeded != null || GlyphLookupFallback != null;
         // Reports the status of glyph loading, including any missing required glyphs.
         public static void ReportStatus()
         {
-            if (loadStatusReported) return;
+            if (loadStatusReported)
+            {
+                return;
+            }
+
             loadStatusReported = true;
 
             int variants = GlyphBitmaps.Count;
-            Diagnostics.ReportInfo($"[GlyphLibrary] Loading glyph art... ({variants} variants registered)");
+            StatusSummary = $"[GlyphLibrary] Glyph cache online ({variants} variants ready).";
             //  Check for missing required glyphs.
             //  Report any missing glyphs from the required set.
             //  Report success if all required glyphs are present.
@@ -113,20 +112,32 @@ namespace stackoverflow_minigame
 
             if (missing.Count == 0)
             {
-                Diagnostics.ReportInfo("[GlyphLibrary] All required glyphs loaded.");
+                StatusSummary = "[GlyphLibrary] All required glyphs loaded. Initials prompt fully armed.";
+                Diagnostics.ReportInfo(StatusSummary);
             }
             else
             {
-                Diagnostics.ReportWarning($"[GlyphLibrary] Missing glyphs: {string.Join(", ", missing)}");
+                string missingList = string.Join(", ", missing);
+                StatusSummary = $"[GlyphLibrary] Missing glyphs: {missingList}";
+                Diagnostics.ReportWarning(StatusSummary);
             }
         }
         private static void PrimeCacheForAllowedGlyphs()
         {
             foreach (char allowed in AllowedGlyphs)
             {
-                if (GlyphBitmaps.TryGetValue(allowed, out var bitmap))
+                if (!GlyphBitmaps.TryGetValue(allowed, out var bitmap))
+                {
+                    Diagnostics.ReportWarning($"Glyph '{allowed}' is allowed but no bitmap was defined.");
+                    continue;
+                }
+                try
                 {
                     GlyphCache[allowed] = DecodeGlyph(bitmap);
+                }
+                catch (Exception ex)
+                {
+                    Diagnostics.ReportFailure($"Failed to prime glyph '{allowed}'.", ex);
                 }
             }
         }
@@ -141,7 +152,7 @@ namespace stackoverflow_minigame
         }
 
         // Builds the internal glyph bitmap dictionary from hardcoded definitions. The format is a series of strings
-        // representing rows of pixels, where '1' is a filled pixel and '0' is an empty pixel. For reference, please look at GlyphArtReference.txt. 
+        // representing rows of pixels, where '1' is a filled pixel and '0' is an empty pixel. For reference, please look at GlyphArtReference.txt.
 
         private static Dictionary<char, byte[]> BuildGlyphBitmaps()
         {
@@ -440,6 +451,55 @@ namespace stackoverflow_minigame
                 "01111",
                 "00001",
                 "11110");
+
+            Add('@',
+                "01110",
+                "10101",
+                "11111",
+                "00100",
+                "00100");
+
+            Add('#',
+                "01010",
+                "11111",
+                "01010",
+                "11111",
+                "01010");
+
+            Add('%',
+                "11001",
+                "11010",
+                "00100",
+                "01011",
+                "10011");
+
+            Add('!',
+                "00100",
+                "00100",
+                "00100",
+                "00000",
+                "00100");
+
+            Add('?',
+                "01110",
+                "10001",
+                "00110",
+                "00000",
+                "00100");
+
+            Add('-',
+                "00000",
+                "00000",
+                "11111",
+                "00000",
+                "00000");
+
+            Add('+',
+                "00100",
+                "00100",
+                "11111",
+                "00100",
+                "00100");
 
             Add('_',
                 "00000",

@@ -2,9 +2,9 @@ using System;
 
 namespace stackoverflow_minigame
 {
-    class Spawner
+    internal class Spawner
     {
-        private readonly Random rand = new();
+        private readonly Random rand;
         private const int EarlyMinGap = 6;
         private const int EarlyMaxGap = 10;
         private const int LateMinGap = 12;
@@ -12,18 +12,25 @@ namespace stackoverflow_minigame
         private const float ExtraPlatformEarlyChance = 0.5f;
         private const float ExtraPlatformLateChance = 0.1f;
         private const int MaxPlatformsPerBand = 3;
-        private const float BandLevelTolerance = 0.2f;
+        private const float MinimumBandTolerance = 0.2f;
         private const int MinGapCeiling = 4;
         private const int HeightDivisorForMaxGap = 2;
         private const int MaxPlacementAttempts = 40;
 
-        // Keeps the vertical bands populated by climbing upward, deriving gaps/extra platforms based on current progress.
+        public Spawner(int? seed = null)
+        {
+            rand = seed.HasValue ? new Random(seed.Value) : new Random();
+        }
+
         public void Update(World world)
         {
             float highestY = world.Offset;
             foreach (Platform platform in world.Platforms)
             {
-                if (platform.Y > highestY) highestY = platform.Y;
+                if (platform.Y > highestY)
+                {
+                    highestY = platform.Y;
+                }
             }
             while (highestY < world.Offset + world.Height)
             {
@@ -39,10 +46,18 @@ namespace stackoverflow_minigame
             float progress = GetProgress(world);
             int minGap = LerpInt(EarlyMinGap, LateMinGap, progress);
             int maxGap = LerpInt(EarlyMaxGap, LateMaxGap, progress);
-            if (maxGap < minGap) maxGap = minGap;
+            if (maxGap < minGap)
+            {
+                maxGap = minGap;
+            }
+
             int gap = rand.Next(minGap, maxGap + 1);
             int maxAllowedGap = Math.Max(MinGapCeiling, world.Height / HeightDivisorForMaxGap);
-            if (gap > maxAllowedGap) gap = maxAllowedGap;
+            if (gap > maxAllowedGap)
+            {
+                gap = maxAllowedGap;
+            }
+
             return Math.Max(1, gap);
         }
 
@@ -75,7 +90,7 @@ namespace stackoverflow_minigame
             if (placed == 0)
             {
                 ForceSpawnPlatform(world, y);
-                Diagnostics.ReportInfo($"Spawner: forced platform at y={y:F2} after {attempts} attempts (level={world.LevelsCompleted}).");
+                Diagnostics.ReportWarning($"Spawner forced platform at y={y:F2} after {attempts} attempts (level={world.LevelsCompleted}).");
             }
         }
 
@@ -87,14 +102,14 @@ namespace stackoverflow_minigame
                 Platform.Release(platform);
                 return false;
             }
-            world.Platforms.Add(platform);
+            world.AddPlatform(platform);
             return true;
         }
 
         private void ForceSpawnPlatform(World world, float y)
         {
             var (platform, _, _) = CreatePlatform(world, y);
-            world.Platforms.Add(platform);
+            world.AddPlatform(platform);
         }
 
         private (Platform platform, int start, int length) CreatePlatform(World world, float y)
@@ -123,7 +138,11 @@ namespace stackoverflow_minigame
             int end = start + length - 1;
             foreach (Platform platform in world.Platforms)
             {
-                if (Math.Abs(platform.Y - y) > BandLevelTolerance) continue;
+                if (Math.Abs(platform.Y - y) > Math.Max(MinimumBandTolerance, Game.FrameTimeSeconds * 2f))
+                {
+                    continue;
+                }
+
                 int existingStart = (int)MathF.Round(platform.X);
                 int existingEnd = existingStart + platform.Length - 1;
                 if (RangesOverlap(start, end, existingStart, existingEnd))

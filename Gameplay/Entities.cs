@@ -1,8 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 
 namespace stackoverflow_minigame
 {
-    abstract class Entity
+    internal abstract class Entity
     {
         public float X { get; protected internal set; }
         public float Y { get; protected internal set; }
@@ -10,7 +11,7 @@ namespace stackoverflow_minigame
         public virtual void Update() { }
     }
 
-    class Player : Entity
+    internal class Player : Entity
     {
         public float VelocityY { get; set; }
         public override char Symbol => '@';
@@ -22,9 +23,9 @@ namespace stackoverflow_minigame
             VelocityY = 0;
         }
     }
-    class Platform : Entity
+    internal class Platform : Entity
     {
-        private static readonly Stack<Platform> Pool = new();
+        private static readonly ConcurrentStack<Platform> Pool = new();
 
         public override char Symbol => '=';
         public int Length { get; private set; }
@@ -33,13 +34,21 @@ namespace stackoverflow_minigame
 
         public static Platform Acquire(int x, float y, int length, int interiorWidth)
         {
-            Platform platform = Pool.Count > 0 ? Pool.Pop() : new Platform();
+            if (!Pool.TryPop(out Platform? platform) || platform == null)
+            {
+                platform = new Platform();
+            }
             platform.Initialize(x, y, length, interiorWidth);
             return platform;
         }
 // Releases a platform back to the pool for reuse.
         public static void Release(Platform platform)
         {
+            if (platform == null)
+            {
+                return;
+            }
+
             Pool.Push(platform);
         }
 

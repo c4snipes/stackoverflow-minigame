@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace stackoverflow_minigame
 {
-    class World
+    internal class World
     // Represents the game world, including the player and platforms.
     // Manages the state and behavior of the world, including player movement, platform management, and world scrolling.
     // Provides methods to reset the world, update the state, and enumerate entities.
@@ -18,7 +18,7 @@ namespace stackoverflow_minigame
         public Player Player { get; private set; }
         private readonly List<Platform> platforms;
         private readonly Random rand;
-        internal List<Platform> Platforms { get { return platforms; } }
+        internal IReadOnlyList<Platform> Platforms => platforms;
         internal const float JumpVelocity = 3.2f;
         public float MaxAltitude { get; private set; }
         public int LevelsCompleted { get; private set; }
@@ -39,12 +39,12 @@ namespace stackoverflow_minigame
         private int visibleRowBudget = int.MaxValue;
         // Creates a new world with the specified width and height.
         // Initializes the player and platform list, and resets the world state.
-        public World(int width, int height)
+        public World(int width, int height, int? randomSeed = null)
         {
             Width = width;
             Height = height;
             platforms = new List<Platform>();
-            rand = new Random();
+            rand = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
             Player = new Player(width / 2, 0);
             Reset();
         }
@@ -159,11 +159,12 @@ namespace stackoverflow_minigame
             int threshold = Math.Max(1, Math.Min(Height / 2, thresholdSource / 2));
             if (Player.Y > threshold)
             {
-                Offset = (int)(Player.Y - threshold);
+                int targetOffset = (int)MathF.Floor(Player.Y - threshold);
+                Offset = Math.Max(0, LerpInt(Offset, targetOffset, 0.25f));
             }
             for (int i = platforms.Count - 1; i >= 0; i--)
             {
-                if (platforms[i].Y < Offset)
+                if (platforms[i].Y < Offset - 1)
                 {
                     Platform.Release(platforms[i]);
                     platforms.RemoveAt(i);
@@ -187,7 +188,10 @@ namespace stackoverflow_minigame
             get
             {
                 yield return Player;
-                foreach (Platform p in platforms) yield return p;
+                foreach (Platform p in platforms)
+                {
+                    yield return p;
+                }
             }
         }
 
@@ -228,6 +232,22 @@ namespace stackoverflow_minigame
                 Platform.Release(platform);
             }
             platforms.Clear();
+        }
+
+        internal void AddPlatform(Platform platform)
+        {
+            if (platform == null)
+            {
+                return;
+            }
+
+            platforms.Add(platform);
+        }
+
+        private static int LerpInt(int current, int target, float factor)
+        {
+            factor = Math.Clamp(factor, 0f, 1f);
+            return (int)MathF.Round(current + (target - current) * factor);
         }
     }
 }

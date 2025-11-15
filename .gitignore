@@ -83,4 +83,7 @@ mono_crash.*
 # Windows shortcuts
 *.lnk
 
+.trunk/
+*.trunk/
 # End of https://www.toptal.com/developers/gitignore/api/visualstudio,windows,macos,monodevelop,rider
+.fake

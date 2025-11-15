@@ -6,14 +6,14 @@ using System.Threading;
 namespace stackoverflow_minigame
 {
     // Provides defensive wrappers around console APIs so rendering can degrade gracefully in constrained environments.
-    static class ConsoleSafe
+    internal static class ConsoleSafe
     {
         // Ticks of the last time a warning was issued for buffer dimension access.
         // Used to throttle warnings to avoid spamming.
         // Initialized to DateTime.MinValue.Ticks to ensure the first warning is always allowed.
         private static long lastWidthWarningTicks = DateTime.MinValue.Ticks;
         private static long lastHeightWarningTicks = DateTime.MinValue.Ticks;
-        private const double WarningCooldownSeconds = 2;
+        private const double WarningCooldownSeconds = 4;
         private static readonly long WarningCooldownTicks = TimeSpan.FromSeconds(WarningCooldownSeconds).Ticks;
         // Gets the console buffer width, returning a fallback value if unavailable.
         // If the buffer width cannot be read, a warning is reported (throttled to avoid
@@ -24,7 +24,10 @@ namespace stackoverflow_minigame
             try
             {
                 int width = Console.BufferWidth;
-                if (width > 0) return width;
+                if (width > 0)
+                {
+                    return width;
+                }
                 ThrottledWarning(ref lastWidthWarningTicks, $"Console reported non-positive buffer width ({width}); using fallback {fallback}.");
                 return fallback;
             }
@@ -42,7 +45,10 @@ namespace stackoverflow_minigame
             try
             {
                 int height = Console.BufferHeight;
-                if (height > 0) return height;
+                if (height > 0)
+                {
+                    return height;
+                }
                 ThrottledWarning(ref lastHeightWarningTicks, $"Console reported non-positive buffer height ({height}); using fallback {fallback}.");
                 return fallback;
             }
@@ -60,7 +66,11 @@ namespace stackoverflow_minigame
             while (true)
             {
                 long previous = Interlocked.Read(ref lastTicks);
-                if (nowTicks - previous < WarningCooldownTicks) return;
+                if (nowTicks - previous < WarningCooldownTicks)
+                {
+                    return;
+                }
+
                 if (Interlocked.CompareExchange(ref lastTicks, nowTicks, previous) == previous)
                 {
                     Diagnostics.ReportWarning(message);
@@ -107,6 +117,58 @@ namespace stackoverflow_minigame
                 Diagnostics.ReportFailure($"Failed to set cursor position to ({left}, {top}).", ex);
                 return false;
             }
+        }
+
+        public static void WriteLine(string text)
+        {
+            try
+            {
+                Console.WriteLine(text);
+            }
+            catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or SecurityException or PlatformNotSupportedException)
+            {
+                Diagnostics.ReportFailure("Failed to write to the console.", ex);
+            }
+        }
+
+        public static void Write(string text)
+        {
+            try
+            {
+                Console.Write(text);
+            }
+            catch (Exception ex) when (ex is IOException or ArgumentOutOfRangeException or SecurityException or PlatformNotSupportedException)
+            {
+                Diagnostics.ReportFailure("Failed to write to the console.", ex);
+            }
+        }
+
+        public static bool WaitForKey(TimeSpan timeout, out ConsoleKeyInfo key)
+        {
+            key = default;
+            DateTime end = DateTime.UtcNow + timeout;
+            while (DateTime.UtcNow < end)
+            {
+                if (Console.IsInputRedirected)
+                {
+                    Thread.Sleep(50);
+                    continue;
+                }
+                try
+                {
+                    if (Console.KeyAvailable)
+                    {
+                        key = Console.ReadKey(intercept: true);
+                        return true;
+                    }
+                }
+                catch
+                {
+                    break;
+                }
+                Thread.Sleep(50);
+            }
+            return false;
         }
     }
 }

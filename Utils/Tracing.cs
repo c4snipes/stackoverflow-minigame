@@ -4,70 +4,131 @@ using System.IO;
 using System.Text;
 using System.Threading;
 
-namespace stackoverflow_minigame {
-    static class Tracing {
-        private static readonly BlockingCollection<string> queue = new(new ConcurrentQueue<string>());
+namespace stackoverflow_minigame
+{
+    internal static class Tracing
+    {
+        private const int MaxQueueSize = 2048;
+        private const int FileRetryCooldownSeconds = 5;
+
+        private static readonly BlockingCollection<string> queue =
+            new(new ConcurrentQueue<string>(), MaxQueueSize);
         private static readonly Thread worker;
-        private static readonly string logPath = Path.Combine(AppContext.BaseDirectory ?? Directory.GetCurrentDirectory(), "trace.log");
+        private static readonly string logPath =
+            Path.Combine(AppContext.BaseDirectory ?? Directory.GetCurrentDirectory(), "trace.log");
+        private static DateTime nextFileRetryUtc = DateTime.MinValue;
         private static bool disposed;
 
-        static Tracing() {
-            worker = new Thread(ProcessQueue) {
+        static Tracing()
+        {
+            worker = new Thread(ProcessQueue)
+            {
                 IsBackground = true,
                 Name = "DiagnosticsTracer"
             };
             worker.Start();
+
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => Dispose();
+            Console.CancelKeyPress += (_, _) => Dispose();
         }
 
-        private static void ProcessQueue() {
+        private static void ProcessQueue()
+        {
             StreamWriter? fileWriter = null;
-            try {
-                try {
-                    fileWriter = new StreamWriter(new FileStream(logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite), Encoding.UTF8) {
-                        AutoFlush = true
-                    };
-                } catch {
-                    // If we can't open the log file, continue with stderr only.
-                }
+            try
+            {
+                foreach (string message in queue.GetConsumingEnumerable())
+                {
+                    fileWriter ??= TryOpenWriter();
 
-                foreach (string message in queue.GetConsumingEnumerable()) {
-                    try {
+                    try
+                    {
                         Console.Error.WriteLine(message);
-                    } catch {
+                    }
+                    catch
+                    {
                         // Ignore console errors; diagnostics shouldn't crash the game.
                     }
 
-                    if (fileWriter != null) {
-                        try {
+                    if (fileWriter != null)
+                    {
+                        try
+                        {
                             fileWriter.WriteLine(message);
-                        } catch {
+                        }
+                        catch
+                        {
                             fileWriter.Dispose();
                             fileWriter = null;
+                            nextFileRetryUtc = DateTime.UtcNow.AddSeconds(FileRetryCooldownSeconds);
                         }
                     }
                 }
-            } finally {
+            }
+            finally
+            {
                 fileWriter?.Dispose();
             }
         }
 
-        public static void Enqueue(string message) {
-            if (disposed) return;
-            try {
-                queue.Add(message);
-            } catch (InvalidOperationException) {
+        private static StreamWriter? TryOpenWriter()
+        {
+            if (DateTime.UtcNow < nextFileRetryUtc)
+            {
+                return null;
+            }
+
+            try
+            {
+                var writer = new StreamWriter(
+                    new FileStream(logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite),
+                    Encoding.UTF8)
+                {
+                    AutoFlush = true
+                };
+                return writer;
+            }
+            catch
+            {
+                nextFileRetryUtc = DateTime.UtcNow.AddSeconds(FileRetryCooldownSeconds);
+                return null;
+            }
+        }
+
+        public static void Enqueue(string message)
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!queue.TryAdd(message))
+                {
+                    // Drop the oldest entry to make room for the latest event.
+                    queue.TryTake(out _);
+                    queue.TryAdd(message);
+                }
+            }
+            catch (InvalidOperationException)
+            {
                 // The queue has been marked as complete for adding; ignore.
             }
         }
 
-        public static void Dispose() {
-            if (disposed) return;
+        public static void Dispose()
+        {
+            if (disposed)
+            {
+                return;
+            }
+
             disposed = true;
             queue.CompleteAdding();
-            if (!worker.Join(TimeSpan.FromSeconds(5))) {
+            if (!worker.Join(TimeSpan.FromSeconds(5)))
+            {
                 Console.Error.WriteLine("Warning: Tracing worker thread did not terminate within 5 seconds.");
-                // Optionally, you could call worker.Join() without a timeout here to wait indefinitely:
-                // worker.Join();
             }
         }
     }

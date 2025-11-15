@@ -12,12 +12,12 @@ using System.Threading.Tasks;
 
 namespace stackoverflow_minigame
 {
-    class ScoreEntry
+    internal class ScoreEntry
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
         public string Initials { get; set; } = "AAA";
         [JsonPropertyName("level")]
-        public int Score { get; set; }
+        public int Level { get; set; }
         public float MaxAltitude { get; set; }
         public long RunTimeTicks { get; set; }
         public bool Victory { get; set; }
@@ -27,7 +27,7 @@ namespace stackoverflow_minigame
         public ScoreEntry Clone() => (ScoreEntry)MemberwiseClone();
     }
 
-    class Scoreboard
+    internal class Scoreboard
     {
         public const string DefaultFileName = "scoreboard.jsonl";
 
@@ -72,15 +72,13 @@ namespace stackoverflow_minigame
             string currentDir = Directory.GetCurrentDirectory();
 
             string? located = FindUpwards(new[] { baseDir, currentDir }, DefaultFileName, FindFileUpwards);
-            if (!string.IsNullOrEmpty(located)) return located;
-
-            string? gitRoot = FindUpwards(new[] { baseDir, currentDir }, ".git", FindDirectoryUpwards);
-            if (!string.IsNullOrEmpty(gitRoot))
+            if (!string.IsNullOrEmpty(located))
             {
-                return Path.Combine(gitRoot, DefaultFileName);
+                return located;
             }
 
-            return Path.Combine(baseDir, DefaultFileName);
+            string? gitRoot = FindUpwards(new[] { baseDir, currentDir }, ".git", FindDirectoryUpwards);
+            return !string.IsNullOrEmpty(gitRoot) ? Path.Combine(gitRoot, DefaultFileName) : Path.Combine(baseDir, DefaultFileName);
         }
 
         private static string? FindUpwards(IEnumerable<string> searchPaths, string target, Func<string, string, string?> finder)
@@ -88,7 +86,10 @@ namespace stackoverflow_minigame
             foreach (var path in searchPaths.Distinct())
             {
                 var result = finder(path, target);
-                if (!string.IsNullOrEmpty(result)) return result;
+                if (!string.IsNullOrEmpty(result))
+                {
+                    return result;
+                }
             }
             return null;
         }
@@ -97,8 +98,8 @@ namespace stackoverflow_minigame
         {
             var entry = new ScoreEntry
             {
-                Initials = initials,
-                Score = score,
+                Initials = ProfanityFilter.FilterInitials(initials),
+                Level = score,
                 MaxAltitude = maxAltitude,
                 RunTimeTicks = runTime.Ticks,
                 Victory = victory,
@@ -110,9 +111,14 @@ namespace stackoverflow_minigame
 
         public void RecordRun(ScoreEntry entry)
         {
-            if (entry == null) throw new ArgumentNullException(nameof(entry));
+            if (entry == null)
+            {
+                throw new ArgumentNullException(nameof(entry));
+            }
+
             lock (sync)
             {
+                entry.Initials = ProfanityFilter.FilterInitials(entry.Initials ?? "AAA");
                 if (string.IsNullOrWhiteSpace(entry.Id))
                 {
                     entry.Id = Guid.NewGuid().ToString("N");
@@ -135,7 +141,7 @@ namespace stackoverflow_minigame
             {
                 var snapshot = RefreshEntriesFromDisk();
                 return snapshot
-                    .OrderByDescending(e => e.Score)
+                    .OrderByDescending(e => e.Level)
                     .ThenBy(e => e.RunTimeTicks)
                     .Take(count)
                     .Select(e => e.Clone())
@@ -149,9 +155,9 @@ namespace stackoverflow_minigame
             {
                 var snapshot = RefreshEntriesFromDisk();
                 return snapshot
-                    .Where(e => e.RunTimeTicks > 0 && e.Score > 0)
+                    .Where(e => e.RunTimeTicks > 0 && e.Level > 0)
                     .OrderBy(e => e.RunTimeTicks)
-                    .ThenByDescending(e => e.Score)
+                    .ThenByDescending(e => e.Level)
                     .Take(count)
                     .Select(e => e.Clone())
                     .ToList();
@@ -227,16 +233,25 @@ namespace stackoverflow_minigame
             {
                 using FileStream stream = new(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 stream.Seek(lastReadPosition, SeekOrigin.Begin);
-                using StreamReader reader = new(stream, Encoding.UTF8);
+                using StreamReader reader = new(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
                 string? line;
                 while ((line = reader.ReadLine()) != null)
                 {
-                    if (IsConflictMarker(line)) continue;
+                    if (IsConflictMarker(line))
+                    {
+                        continue;
+                    }
+
                     ScoreEntry? parsed = ParseLine(line);
-                    if (parsed == null || string.IsNullOrWhiteSpace(parsed.Id)) continue;
+                    if (parsed == null || string.IsNullOrWhiteSpace(parsed.Id))
+                    {
+                        continue;
+                    }
+
                     ApplyEntry(parsed);
                 }
-                lastReadPosition = stream.Position;
+                reader.DiscardBufferedData();
+                lastReadPosition = stream.Seek(0, SeekOrigin.Current);
             }
             catch (IOException ex)
             {
@@ -255,9 +270,17 @@ namespace stackoverflow_minigame
             {
                 foreach (string line in File.ReadLines(filePath))
                 {
-                    if (IsConflictMarker(line)) continue;
+                    if (IsConflictMarker(line))
+                    {
+                        continue;
+                    }
+
                     ScoreEntry? parsed = ParseLine(line);
-                    if (parsed == null || string.IsNullOrWhiteSpace(parsed.Id)) continue;
+                    if (parsed == null || string.IsNullOrWhiteSpace(parsed.Id))
+                    {
+                        continue;
+                    }
+
                     ApplyEntry(parsed);
                 }
                 FileInfo info = new(filePath);
@@ -329,9 +352,17 @@ namespace stackoverflow_minigame
             while (!string.IsNullOrEmpty(current))
             {
                 string? result = evaluator(current);
-                if (!string.IsNullOrEmpty(result)) return result;
+                if (!string.IsNullOrEmpty(result))
+                {
+                    return result;
+                }
+
                 string? parent = Directory.GetParent(current)?.FullName;
-                if (parent == null || parent == current) break;
+                if (parent == null || parent == current)
+                {
+                    break;
+                }
+
                 current = parent;
             }
             return null;
@@ -353,8 +384,7 @@ namespace stackoverflow_minigame
 
         private static string? NormalizeEnvVariable(string? value)
         {
-            if (string.IsNullOrWhiteSpace(value)) return null;
-            return value.Trim().Trim('"').Trim('\'').Trim();
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim().Trim('"').Trim('\'').Trim();
         }
 
         private void InitializeDispatchers()
@@ -420,12 +450,12 @@ namespace stackoverflow_minigame
             string encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(jsonLine));
             if (dispatchClient != null && dispatchUri != null)
             {
-                _ = Task.Run(() => DispatchScoreboardEntryAsync(encoded));
+                FireAndForget(() => DispatchScoreboardEntryAsync(encoded), "Scoreboard dispatch task failed.");
             }
 
             if (webhookClient != null && webhookUri != null)
             {
-                _ = Task.Run(() => SendWebhookAsync(encoded, jsonLine));
+                FireAndForget(() => SendWebhookAsync(encoded, jsonLine), "Scoreboard webhook task failed.");
             }
         }
 
@@ -523,6 +553,21 @@ namespace stackoverflow_minigame
 
             [JsonPropertyName("line")]
             public string Line { get; init; } = string.Empty;
+        }
+
+        private static void FireAndForget(Func<Task> action, string description)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await action().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Diagnostics.ReportFailure(description, ex);
+                }
+            });
         }
     }
 }

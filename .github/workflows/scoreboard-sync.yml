@@ -24,21 +24,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate webhook secrets
+      - name: Check webhook configuration
+        id: check_secrets
         env:
           STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL: ${{ secrets.STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL }}
           STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET: ${{ secrets.STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET }}
         run: |
-          if [[ -z "$STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL" ]]; then
-            echo "STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL secret is missing."
-            exit 1
-          fi
-          if [[ -z "$STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET" ]]; then
-            echo "STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET secret is missing."
-            exit 1
+          if [[ -z "$STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL" ]] || [[ -z "$STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET" ]]; then
+            echo "Webhook secrets not configured. Skipping webhook forwarding."
+            echo "To enable webhook forwarding, add the following secrets to your repository:"
+            echo "  - STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL"
+            echo "  - STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET"
+            echo "secrets_configured=false" >> $GITHUB_OUTPUT
+            exit 0
+          else
+            echo "secrets_configured=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Forward entry to Fly webhook
+        if: steps.check_secrets.outputs.secrets_configured == 'true'
         env:
           PAYLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.line_b64 || github.event.client_payload.line_b64 }}
           STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL: ${{ secrets.STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL }}

@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 
 namespace stackoverflow_minigame
 {
-    static class Diagnostics
+    internal static class Diagnostics
     {
         // Events for reporting diagnostics messages.
         // Subscribers can listen to these events to handle diagnostics output.

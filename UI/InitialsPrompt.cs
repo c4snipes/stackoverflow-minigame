@@ -11,10 +11,11 @@ namespace stackoverflow_minigame
     /// with visual feedback using ASCII art glyphs. Supports character validation, blinking
     /// cursor, and cancellation.
     /// </summary>
-    sealed class InitialsPrompt
+    internal sealed class InitialsPrompt
     {
         private readonly Input input;
         private readonly int maxChars;
+        private static readonly object GlyphLock = new();
         private static readonly Dictionary<char, string[]> GlyphCache = new();
         [ThreadStatic] private static StringBuilder? GlyphBuilder;
 
@@ -42,9 +43,25 @@ namespace stackoverflow_minigame
             initials = fallback;
             string current = string.Empty;
 
-            Console.Clear();
+            try
+            {
+                Console.Clear();
+            }
+            catch (IOException ex)
+            {
+                Diagnostics.ReportFailure("Failed to clear console for initials prompt; using fallback.", ex);
+                callbacks.FallbackUsed?.Invoke(fallback);
+                initials = fallback;
+                return true;
+            }
+
             callbacks.PromptStarted?.Invoke();
-            WriteArcadePrompt(out int artTopRow, out int promptRow);
+            if (!WriteArcadePrompt(out int artTopRow, out int promptRow))
+            {
+                callbacks.FallbackUsed?.Invoke(fallback);
+                initials = fallback;
+                return true;
+            }
             bool lastBlink = false;
             string lastRendered = string.Empty;
             bool lastRenderSucceeded = false;
@@ -61,7 +78,11 @@ namespace stackoverflow_minigame
             void RefreshPrompt(bool forceBlink)
             {
                 bool effectiveBlink = forceBlink || (Environment.TickCount / 500 % 2) == 0;
-                if (lastRenderSucceeded && lastBlink == effectiveBlink && lastRendered == current) return;
+                if (lastRenderSucceeded && lastBlink == effectiveBlink && lastRendered == current)
+                {
+                    return;
+                }
+
                 WriteInitialsLine(current, maxChars, promptRow, effectiveBlink);
                 lastRenderSucceeded = TryRenderInitialsArt(current, maxChars, artTopRow, effectiveBlink);
                 lastBlink = effectiveBlink;
@@ -75,12 +96,10 @@ namespace stackoverflow_minigame
                 ConsoleKeyInfo keyInfo;
                 try
                 {
-                    if (!Console.KeyAvailable)
+                    if (!ConsoleSafe.WaitForKey(TimeSpan.FromMilliseconds(100), out keyInfo))
                     {
-                        Thread.Sleep(50);
                         continue;
                     }
-                    keyInfo = Console.ReadKey(intercept: true);
                 }
                 catch (InvalidOperationException)
                 {
@@ -96,7 +115,7 @@ namespace stackoverflow_minigame
                     return true;
                 }
                 // Handle special keys: Escape to cancel, Enter to commit, Backspace to delete.
-                // Other keys are validated and normalized. 
+                // Other keys are validated and normalized.
                 // Accepted characters are appended until maxChars is reached.
                 // Rejected characters trigger the CharRejected callback.
                 // Accepted characters trigger the CharAccepted callback.
@@ -111,8 +130,16 @@ namespace stackoverflow_minigame
 
                 if (keyInfo.Key == ConsoleKey.Enter)
                 {
-                    if (current.Length == 0) continue;
-                    while (current.Length < maxChars) current += '_';
+                    if (current.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    while (current.Length < maxChars)
+                    {
+                        current += '_';
+                    }
+
                     initials = current.ToUpperInvariant();
                     callbacks.InitialsCommitted?.Invoke(initials);
                     InvalidateRender();
@@ -144,26 +171,37 @@ namespace stackoverflow_minigame
         }
         // Renders the static parts of the arcade initials prompt and returns the top row of the art and the prompt row.
         // Returns the top row of the art and the prompt row.
-        private static void WriteArcadePrompt(out int artTopRow, out int promptRow)
+        private static bool WriteArcadePrompt(out int artTopRow, out int promptRow)
         {
+            artTopRow = 0;
+            promptRow = 0;
+            int bufferWidth = ConsoleSafe.GetBufferWidth(80);
+            int bufferHeight = ConsoleSafe.GetBufferHeight(30);
+            if (bufferWidth <= 10 || bufferHeight <= GlyphLibrary.GlyphHeight + 5)
+            {
+                Diagnostics.ReportFailure("Console window too small for initials prompt.");
+                return false;
+            }
+
             ConsoleColor originalColor = Console.ForegroundColor;
             try
             {
                 Console.ForegroundColor = ConsoleColor.Cyan;
-                Console.WriteLine("========================================");
-                Console.WriteLine("          STACKOVERFLOW SKY            ");
-                Console.WriteLine("========================================");
-                Console.WriteLine();
-                Console.WriteLine("ENTER YOUR INITIALS");
-                Console.WriteLine("UPPERCASE LETTERS & NUMBERS ONLY (3 CHARACTERS, ESC TO CANCEL)");
-                Console.WriteLine();
+                ConsoleSafe.WriteLine("========================================");
+                ConsoleSafe.WriteLine("          STACKOVERFLOW SKY            ");
+                ConsoleSafe.WriteLine("========================================");
+                ConsoleSafe.WriteLine(string.Empty);
+                ConsoleSafe.WriteLine("ENTER YOUR INITIALS");
+                ConsoleSafe.WriteLine("UPPERCASE LETTERS & NUMBERS ONLY (3 CHARACTERS, ESC TO CANCEL)");
+                ConsoleSafe.WriteLine(string.Empty);
                 artTopRow = Console.CursorTop;
                 for (int i = 0; i < GlyphLibrary.GlyphHeight; i++)
                 {
-                    Console.WriteLine();
+                    ConsoleSafe.WriteLine(string.Empty);
                 }
-                Console.WriteLine();
+                ConsoleSafe.WriteLine(string.Empty);
                 promptRow = Console.CursorTop;
+                return true;
             }
             finally
             {
@@ -191,8 +229,12 @@ namespace stackoverflow_minigame
                     }
                     string line = composedRows[row];
                     int width = Console.BufferWidth > 0 ? Console.BufferWidth - 1 : line.Length;
-                    if (line.Length < width) line = line.PadRight(width);
-                    Console.Write(line.Length > width ? line[..width] : line);
+                    if (line.Length < width)
+                    {
+                        line = line.PadRight(width);
+                    }
+
+                    ConsoleSafe.Write(line.Length > width ? line[..width] : line);
                 }
                 return true;
             }
@@ -206,10 +248,18 @@ namespace stackoverflow_minigame
         private static void WriteInitialsLine(string current, int maxChars, int row, bool blinkOn)
         {
             string display = current.PadRight(maxChars, blinkOn ? '_' : ' ');
-            if (!ConsoleSafe.TrySetCursorPosition(0, row)) return;
-            Console.Write(new string(' ', Math.Max(0, Console.BufferWidth - 1)));
-            if (!ConsoleSafe.TrySetCursorPosition(0, row)) return;
-            Console.Write($"INITIALS: {display}");
+            if (!ConsoleSafe.TrySetCursorPosition(0, row))
+            {
+                return;
+            }
+
+            ConsoleSafe.Write(new string(' ', Math.Max(0, Console.BufferWidth - 1)));
+            if (!ConsoleSafe.TrySetCursorPosition(0, row))
+            {
+                return;
+            }
+
+            ConsoleSafe.Write($"INITIALS: {display}");
         }
 
         private static bool TryNormalizeInitialChar(ConsoleKeyInfo keyInfo, out char normalized)
@@ -255,8 +305,14 @@ namespace stackoverflow_minigame
                 char key = padded[i];
                 if (!GlyphCache.TryGetValue(key, out var glyph))
                 {
-                    glyph = GlyphLibrary.GetGlyph(key);
-                    GlyphCache[key] = glyph;
+                    lock (GlyphLock)
+                    {
+                        if (!GlyphCache.TryGetValue(key, out glyph))
+                        {
+                            glyph = GlyphLibrary.GetGlyph(key);
+                            GlyphCache[key] = glyph;
+                        }
+                    }
                 }
                 glyphs[i] = glyph;
             }

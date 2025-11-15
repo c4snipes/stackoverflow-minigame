@@ -5,11 +5,14 @@ using System.IO;
 using System.Threading;
 using System.Security;
 
-namespace stackoverflow_minigame {
-    enum GameState { Menu, Running, Over }
+namespace stackoverflow_minigame
+{
+    internal enum GameState { Menu, Running, Over }
 
-    class Game {
-        static Game() {
+    internal class Game
+    {
+        static Game()
+        {
             Diagnostics.FailureReported += DefaultFailureLogger;
         }
 
@@ -51,15 +54,20 @@ namespace stackoverflow_minigame {
         private const float HorizontalIntentMemorySeconds = 0.12f;
         private const float DangerZoneThreshold = 3f;
 
-        private static void DefaultFailureLogger(string message) {
-            try {
+        private static void DefaultFailureLogger(string message)
+        {
+            try
+            {
                 Console.Error.WriteLine($"[Diagnostics] {message}");
-            } catch {
+            }
+            catch
+            {
                 // Ignore console failures while logging diagnostics.
             }
         }
 
-        public Game() {
+        public Game()
+        {
             // Changed world width from 80 to 60 to improve platform density and enhance gameplay pacing.
             // This adjustment makes the game area more compact, increasing challenge and reducing empty space.
             world = new World(60, 38);
@@ -70,22 +78,32 @@ namespace stackoverflow_minigame {
             initialsPrompt = new InitialsPrompt(input);
         }
 
-        public void Run() {
+        public void Run()
+        {
             bool cursorHidden = false;
-            try {
+            try
+            {
                 Console.CursorVisible = false;
                 cursorHidden = true;
-            } catch (IOException ex) {
+            }
+            catch (IOException ex)
+            {
                 Diagnostics.ReportFailure("Failed to hide cursor.", ex);
-            } catch (SecurityException ex) {
+            }
+            catch (SecurityException ex)
+            {
                 Diagnostics.ReportFailure("Insufficient permissions to hide cursor.", ex);
             }
 
             input.Start();
-            try {
-                while (running) {
-                    try {
-                        switch (state) {
+            try
+            {
+                while (running)
+                {
+                    try
+                    {
+                        switch (state)
+                        {
                             case GameState.Menu:
                                 MenuLoop();
                                 break;
@@ -96,20 +114,30 @@ namespace stackoverflow_minigame {
                                 OverLoop();
                                 break;
                         }
-                    } catch (IOException ex) {
+                    }
+                    catch (IOException ex)
+                    {
                         Diagnostics.ReportFailure("Console IO error during game loop.", ex);
                         running = false;
-                    } catch (SecurityException ex) {
+                    }
+                    catch (SecurityException ex)
+                    {
                         Diagnostics.ReportFailure("Console permission error during game loop.", ex);
                         running = false;
                     }
                 }
-            } finally {
+            }
+            finally
+            {
                 input.Dispose();
-                if (cursorHidden) {
-                    try {
+                if (cursorHidden)
+                {
+                    try
+                    {
                         Console.CursorVisible = true;
-                    } catch {
+                    }
+                    catch
+                    {
                         // ignore cursor restore failures
                     }
                 }
@@ -130,55 +158,67 @@ namespace stackoverflow_minigame {
 
                 if (!input.SupportsInteractiveInput)
                 {
-                    Console.WriteLine();
-                    Console.WriteLine("Interactive console input isn't available in this environment.");
-                    Console.WriteLine("Run inside a terminal window to take the jump!");
+                    try
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("Interactive console input isn't available in this environment.");
+                        Console.WriteLine("Run inside a terminal window to take the jump!");
+                    }
+                    catch (IOException ex)
+                    {
+                        Diagnostics.ReportFailure("Failed to print interactive input warning.", ex);
+                    }
                     Thread.Sleep(2000);
                     running = false;
                     return;
                 }
 
-                if (input.TryReadKey(out var key))
+                if (!input.WaitForKey(100, out var key))
                 {
-                    if (key.Key == ConsoleKey.Q || key.Key == ConsoleKey.Escape)
-                    {
-                        running = false;
-                        return;
-                    }
-                    if (key.Key == ConsoleKey.L)
-                    {
-                        if (initialsConfirmed)
-                        {
-                            ShowLeaderboard();
-                            redrawMenu = true;
-                        }
-                        else
-                        {
-                            Console.WriteLine("[info] Enter initials first before viewing the leaderboard.");
-                        }
-                        continue;
-                    }
-                    StartRun();
+                    continue;
+                }
+                if (key.Key == ConsoleKey.Q || key.Key == ConsoleKey.Escape)
+                {
+                    running = false;
                     return;
                 }
-                Thread.Sleep(10);
+                if (key.Key == ConsoleKey.L)
+                {
+                    ShowLeaderboard();
+                    redrawMenu = true;
+                    continue;
+                }
+                StartRun();
+                return;
             }
         }
         // Renders the menu header and instructions.
-        // Called when entering the menu state or after viewing the leaderboard.    
+        // Called when entering the menu state or after viewing the leaderboard.
         private void RenderMenuHeader()
         {
-            Console.Clear();
-            ConsoleSafe.TrySetCursorPosition(0, 0);
-            Console.WriteLine("STACKOVERFLOW SKY CLIMBER");
-            Console.WriteLine("You are a lonely stack frame climbing toward accepted glory.");
-            Console.WriteLine("Press any key to start recursion (Q/Esc to bail, L to view leaderboard).");
+            try
+            {
+                Console.Clear();
+                ConsoleSafe.TrySetCursorPosition(0, 0);
+                ConsoleSafe.WriteLine("STACKOVERFLOW SKY CLIMBER");
+                ConsoleSafe.WriteLine("You are a lonely stack frame climbing toward accepted glory.");
+                ConsoleSafe.WriteLine("The backlog towers above—each platform an unanswered question waiting to topple you.");
+                ConsoleSafe.WriteLine("Purge the recursive calls, stabilize the threads, and escape before the pager screams.");
+                ConsoleSafe.WriteLine("Press any key to start recursion (Q/Esc to bail, L to view leaderboard).");
+                ConsoleSafe.WriteLine(GlyphLibrary.StatusSummary);
+                ConsoleSafe.WriteLine(string.Empty);
+            }
+            catch (IOException ex)
+            {
+                Diagnostics.ReportFailure("Failed to render the menu header.", ex);
+            }
         }
 
-        private void StartRun() {
-            if (!EnsureInitialsSet()) {
+        private void StartRun()
+        {
+            if (!EnsureInitialsSet())
+            {
                 state = GameState.Menu;
-                running = true;
                 return;
             }
             state = GameState.Running;
@@ -195,11 +235,28 @@ namespace stackoverflow_minigame {
             input.ClearBuffer();
         }
 
-        private void ShowLeaderboard() {
-            using (input.PauseListening()) {
+        private void ShowLeaderboard()
+        {
+            using (input.PauseListening())
+            {
                 input.ClearBuffer();
-                LeaderboardViewer viewer = new LeaderboardViewer();
-                viewer.Run(embedded: true);
+                try
+                {
+                    LeaderboardViewer viewer = new LeaderboardViewer();
+                    viewer.Run(embedded: true);
+                }
+                catch (Exception ex)
+                {
+                    Diagnostics.ReportFailure("Failed to display the leaderboard viewer.", ex);
+                    try
+                    {
+                        Console.WriteLine("[warning] Unable to load the leaderboard right now.");
+                    }
+                    catch
+                    {
+                        // ignore console write failures
+                    }
+                }
             }
         }
 
@@ -224,7 +281,7 @@ namespace stackoverflow_minigame {
                 return false;
             }
 
-            playerInitials = initials;
+            playerInitials = ProfanityFilter.FilterInitials(initials);
             initialsConfirmed = true;
             return true;
         }
@@ -241,7 +298,10 @@ namespace stackoverflow_minigame {
                 Stopwatch workTimer = Stopwatch.StartNew();
 
                 ProcessGameplayInput(deltaSeconds);
-                if (!running || state != GameState.Running) break;
+                if (!running || state != GameState.Running)
+                {
+                    break;
+                }
 
                 UpdateVisibleRowBudget();
                 world.Update(deltaSeconds, horizontalDirection, fastDropQueued);
@@ -280,7 +340,8 @@ namespace stackoverflow_minigame {
             }
         }
         // Game over loop: display results, handle input to restart or quit.
-        private void OverLoop() {
+        private void OverLoop()
+        {
             Console.Clear();
             Console.WriteLine(playerWon ? "YOU CLEARED THE ERROR STACK!" : "*** STACKOVERFLOW EXCEPTION ***");
             Console.WriteLine($"Levels cleared: {framesClimbed}");
@@ -290,19 +351,23 @@ namespace stackoverflow_minigame {
             Console.WriteLine();
             Console.WriteLine("Top Levels:");
             var topScores = scoreboard.GetTopScores(3);
-            WriteScoreboard(topScores, entry => $"{entry.Initials} - {entry.Score} lvls ({TimeFormatting.FormatDuration(entry.RunTime)})");
+            WriteScoreboard(topScores, entry => $"{entry.Initials} - {entry.Level} lvls ({TimeFormatting.FormatDuration(entry.RunTime)})");
             Console.WriteLine("Fastest Runs:");
             var fastestRuns = scoreboard.GetFastestRuns(3);
-            WriteScoreboard(fastestRuns, entry => $"{entry.Initials} - {TimeFormatting.FormatDuration(entry.RunTime)} ({entry.Score} lvls)");
+            WriteScoreboard(fastestRuns, entry => $"{entry.Initials} - {TimeFormatting.FormatDuration(entry.RunTime)} ({entry.Level} lvls)");
             Console.WriteLine("Press R to restart or Q/Esc to quit.");
-            input.ClearBuffer();                
-            while (state == GameState.Over && running) {
-                if (input.TryReadKey(out var key)) {
-                    if (key.Key == ConsoleKey.Q || key.Key == ConsoleKey.Escape) {
+            input.ClearBuffer();
+            while (state == GameState.Over && running)
+            {
+                if (input.TryReadKey(out var key))
+                {
+                    if (key.Key == ConsoleKey.Q || key.Key == ConsoleKey.Escape)
+                    {
                         running = false;
                         return;
                     }
-                    if (key.Key == ConsoleKey.R) {
+                    if (key.Key == ConsoleKey.R)
+                    {
                         state = GameState.Menu;
                         return;
                     }
@@ -357,62 +422,82 @@ namespace stackoverflow_minigame {
                 }
             }
         }
-// Updates the horizontal movement intent based on input direction.
-        private void UpdateHorizontalIntent(int direction) {
+        // Updates the horizontal movement intent based on input direction.
+        private void UpdateHorizontalIntent(int direction)
+        {
             horizontalDirection = Math.Clamp(direction, -1, 1);
             horizontalIntentTimer = HorizontalIntentMemorySeconds;
         }
-// Cycles the HUD display mode between Full, Compact, and Hidden.
-        private void CycleHudMode() {
-            hudMode = hudMode switch {
+        // Cycles the HUD display mode between Full, Compact, and Hidden.
+        private void CycleHudMode()
+        {
+            hudMode = hudMode switch
+            {
                 HudMode.Full => HudMode.Compact,
                 HudMode.Compact => HudMode.Hidden,
                 _ => HudMode.Full
             };
         }
-// Triggers the game over state and records the run outcome.
-        private void TriggerGameOver(bool won) {
-            if (state == GameState.Over) return;
+        // Triggers the game over state and records the run outcome.
+        private void TriggerGameOver(bool won)
+        {
+            if (state == GameState.Over)
+            {
+                return;
+            }
+
             playerWon = won;
             state = GameState.Over;
             StopAndRecordRun();
         }
 
-        private void StopAndRecordRun() {
-            if (runStopwatch.IsRunning) {
+        private void StopAndRecordRun()
+        {
+            if (runStopwatch.IsRunning)
+            {
                 runStopwatch.Stop();
             }
             scoreboard.RecordRun(playerInitials, framesClimbed, world.MaxAltitude, runStopwatch.Elapsed, playerWon);
             bestFrames = Math.Max(bestFrames, framesClimbed);
         }
 
-        private static void WriteScoreboard(IReadOnlyList<ScoreEntry> entries, Func<ScoreEntry, string> formatter) {
-            if (entries.Count == 0) {
+        private static void WriteScoreboard(IReadOnlyList<ScoreEntry> entries, Func<ScoreEntry, string> formatter)
+        {
+            if (entries.Count == 0)
+            {
                 Console.WriteLine("  (no records yet)");
                 return;
             }
 
-            for (int i = 0; i < entries.Count; i++) {
+            for (int i = 0; i < entries.Count; i++)
+            {
                 Console.WriteLine($"  {i + 1}. {formatter(entries[i])}");
             }
         }
-// Ensures the player remains within horizontal bounds of the world.
-        private void ClampPlayerWithinBounds() {
+        // Ensures the player remains within horizontal bounds of the world.
+        private void ClampPlayerWithinBounds()
+        {
             world.Player.X = Math.Clamp(world.Player.X, 0f, Math.Max(0, world.Width - 1));
         }
 
-        private void DrawHud() {
-            if (hudMode == HudMode.Hidden) return;
+        private void DrawHud()
+        {
+            if (hudMode == HudMode.Hidden)
+            {
+                return;
+            }
 
             int fallbackWidth = renderer.VisibleWidth > 0 ? renderer.VisibleWidth : 1;
             int consoleWidth = ConsoleSafe.GetBufferWidth(fallbackWidth);
-            if (consoleWidth <= 0) {
+            if (consoleWidth <= 0)
+            {
                 Diagnostics.ReportFailure("DrawHud aborted because console width could not be resolved.");
                 return;
             }
 
             int hudWidth = renderer.VisibleWidth > 0 ? Math.Min(renderer.VisibleWidth, consoleWidth) : consoleWidth;
-            if (hudWidth <= 0) {
+            if (hudWidth <= 0)
+            {
                 Diagnostics.ReportFailure("DrawHud aborted because the HUD width resolved to zero.");
                 return;
             }
@@ -421,18 +506,21 @@ namespace stackoverflow_minigame {
             // beyond the console's buffer height. When the buffer is tiny we
             // clamp the HUD into the available rows.
             int consoleHeight = ConsoleSafe.GetBufferHeight(renderer.VisibleHeight + Renderer.HudRows);
-            if (consoleHeight <= 0) {
+            if (consoleHeight <= 0)
+            {
                 consoleHeight = renderer.VisibleHeight + Renderer.HudRows;
             }
             int hudStartRow = Math.Max(renderer.VisibleHeight, consoleHeight - Renderer.HudRows);
-            if (hudStartRow < 0 || hudStartRow + Renderer.HudRows > consoleHeight) {
+            if (hudStartRow < 0 || hudStartRow + Renderer.HudRows > consoleHeight)
+            {
                 hudStartRow = Math.Max(0, consoleHeight - Renderer.HudRows);
             }
 
             int hudRowsAvailable = Math.Max(0, consoleHeight - hudStartRow);
             bool showProgress = hudMode == HudMode.Full && hudRowsAvailable >= 2;
             bool showControls = hudMode == HudMode.Full && hudRowsAvailable >= 3;
-            if (hudMode == HudMode.Compact) {
+            if (hudMode == HudMode.Compact)
+            {
                 showProgress = false;
                 showControls = false;
             }
@@ -447,13 +535,15 @@ namespace stackoverflow_minigame {
             // The HUD is drawn at the calculated starting row and respects console width constraints.
             WriteHudLine(hudStartRow + 0, $"Player: {playerInitials} | Level: {world.LevelsCompleted,4} | Score: {framesClimbed,4} | Height: {currentHeight,4} | Max: {maxHeight,4} | Best: {displayedBest,4} | Time: {timeText,8}", hudWidth, statsColor);
 
-            if (showProgress) {
+            if (showProgress)
+            {
                 float progress = Math.Clamp(world.LevelsCompleted / (float)World.GoalPlatforms, 0f, 1f);
                 string percentText = $"{progress * 100f:0}%";
                 string goalText = $"{World.GoalPlatforms} levels";
                 int reservedWidth = $"Progress:  {percentText} of goal {goalText}".Length;
                 int barAvailable = Math.Max(MIN_PROGRESS_BAR_WIDTH, Math.Min(MAX_PROGRESS_BAR_WIDTH, hudWidth - reservedWidth));
-                ConsoleColor progressColor = progress switch {
+                ConsoleColor progressColor = progress switch
+                {
                     >= 0.66f => ConsoleColor.Green,
                     >= 0.33f => ConsoleColor.Yellow,
                     _ => ConsoleColor.Red
@@ -461,23 +551,27 @@ namespace stackoverflow_minigame {
                 WriteHudLine(hudStartRow + 1, $"Progress: {BuildProgressBar(progress, barAvailable)} {percentText} of goal {goalText}", hudWidth, progressColor);
             }
 
-            if (showControls) {
+            if (showControls)
+            {
                 WriteHudLine(hudStartRow + 2, "Controls: A/D or <-/-> move, S/↓ dives, Space jumps, Q/Esc quits", hudWidth, ConsoleColor.Cyan);
             }
         }
         // Rounds the altitude to the nearest integer for display purposes.
         private static int GetRoundedAltitude(float altitude) => (int)MathF.Round(altitude);
 
-        private static void WriteHudLine(int row, string text, int widthHint, ConsoleColor? color = null) {
+        private static void WriteHudLine(int row, string text, int widthHint, ConsoleColor? color = null)
+        {
             int bufferHeight = ConsoleSafe.GetBufferHeight(-1);
-            if (bufferHeight >= 0 && row >= bufferHeight) {
+            if (bufferHeight >= 0 && row >= bufferHeight)
+            {
                 Diagnostics.ReportFailure($"WriteHudLine skipped row {row} because it exceeds buffer height {bufferHeight}.");
                 return;
             }
 
             int fallbackWidth = widthHint > 0 ? widthHint : 1;
             int consoleWidth = ConsoleSafe.GetBufferWidth(fallbackWidth);
-            if (consoleWidth <= 0) {
+            if (consoleWidth <= 0)
+            {
                 Diagnostics.ReportFailure("WriteHudLine aborted because console width could not be read.");
                 return;
             }
@@ -485,29 +579,42 @@ namespace stackoverflow_minigame {
             string output = text.Length > consoleWidth
                 ? text[..consoleWidth]
                 : text.PadRight(consoleWidth);
-            if (!ConsoleSafe.TrySetCursorPosition(0, row)) return;
+            if (!ConsoleSafe.TrySetCursorPosition(0, row))
+            {
+                return;
+            }
+
             ConsoleColor originalColor = Console.ForegroundColor;
-            if (color.HasValue) {
+            if (color.HasValue)
+            {
                 Console.ForegroundColor = color.Value;
             }
             Console.Out.Write(output);
-            if (color.HasValue) {
+            if (color.HasValue)
+            {
                 Console.ForegroundColor = originalColor;
             }
         }
 
-        private static string BuildProgressBar(float progress, int width) {
+        private static string BuildProgressBar(float progress, int width)
+        {
             int clampedWidth = Math.Clamp(width, MIN_PROGRESS_BAR_WIDTH, MAX_PROGRESS_BAR_WIDTH);
             int filled = (int)MathF.Round(progress * clampedWidth);
-            if (filled > clampedWidth) filled = clampedWidth;
+            if (filled > clampedWidth)
+            {
+                filled = clampedWidth;
+            }
+
             string bar = new string('#', filled).PadRight(clampedWidth, '.');
             return $"[{bar}]";
         }
 
-        private void UpdateVisibleRowBudget() {
+        private void UpdateVisibleRowBudget()
+        {
             int totalPadding = Renderer.HudRows + Renderer.BorderThickness * 2;
             int consoleHeight = ConsoleSafe.GetBufferHeight(world.Height + totalPadding);
-            if (consoleHeight <= 0) {
+            if (consoleHeight <= 0)
+            {
                 consoleHeight = world.Height + totalPadding;
             }
             int playableRows = Math.Max(1, consoleHeight - totalPadding);

@@ -3,14 +3,14 @@ using System.IO;
 
 namespace stackoverflow_minigame
 {
-    class Program
+    internal class Program
     {
         private const string LeaderboardArg = "leaderboard";
         private const string DiagnosticsArg = "trace";
         private const string ModeEnvVar = "STACKOVERFLOW_MINIGAME_MODE";
         private static bool diagnosticsHooked;
 
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
             var parsedArgs = NormalizeArgs(args, out var unknownArgs, out bool sufferedParseError);
             if (sufferedParseError || unknownArgs.Count > 0)
@@ -70,7 +70,11 @@ namespace stackoverflow_minigame
         // Central place to wire verbose diagnostics so --trace lights up every relevant event without scattering hooks.
         private static void HookDiagnostics(Game game)
         {
-            if (diagnosticsHooked) return;
+            if (diagnosticsHooked)
+            {
+                return;
+            }
+
             diagnosticsHooked = true;
 
             game.InitialsPromptStarted += () => Diagnostics.ReportInfo("Initials prompt started.");
@@ -94,7 +98,11 @@ namespace stackoverflow_minigame
             parseError = false;
             foreach (string raw in args)
             {
-                if (string.IsNullOrWhiteSpace(raw)) continue;
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    continue;
+                }
+
                 string trimmedRaw = raw.Trim();
                 int dashCount = 0;
                 while (dashCount < trimmedRaw.Length && trimmedRaw[dashCount] == '-')
@@ -108,7 +116,11 @@ namespace stackoverflow_minigame
                     continue;
                 }
                 string trimmed = dashCount > 0 ? trimmedRaw[dashCount..] : trimmedRaw;
-                if (string.IsNullOrEmpty(trimmed)) continue;
+                if (string.IsNullOrEmpty(trimmed))
+                {
+                    continue;
+                }
+
                 if (trimmed.Contains('='))
                 {
                     parseError = true;

@@ -37,7 +37,7 @@ def main() -> int:
     body = json.dumps({"line": line}).encode("utf-8")
     req = urlrequest.Request(webhook_url, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
-    req.add_header("Content-Type", "application/json")
+    req.add_header("Accept", "application/json")
     secret = os.environ.get(WEBHOOK_SECRET_ENV)
     if secret:
         req.add_header("X-Scoreboard-Secret", secret.strip())
@@ -50,9 +50,11 @@ def main() -> int:
 
 def _resolve_line() -> Optional[str]:
     """Return the decoded JSON line from env vars or None on failure."""
+    source = None
     raw_line = os.environ.get(PLAIN_ENV)
     if raw_line:
         line = raw_line.strip()
+        source = PLAIN_ENV
     else:
         payload = os.environ.get("PAYLOAD")
         if not payload:
@@ -60,20 +62,29 @@ def _resolve_line() -> Optional[str]:
             return None
         try:
             line = base64.b64decode(payload).decode("utf-8").strip()
+            source = "PAYLOAD"
         except Exception as exc:  # noqa: BLE001
             print(f"Failed to decode payload: {exc}")
             return None
 
     if not line:
-        print("Decoded payload is empty; nothing to append.")
+        label = source or "payload"
+        print(f"Decoded {label} is empty; nothing to append.")
         return None
 
-    try:
-        json.loads(line)
-    except json.JSONDecodeError as exc:
-        print(f"Payload is not valid JSON: {exc}")
+    if not _validate_json_line(line, source):
         return None
     return line
+
+
+def _validate_json_line(line: str, source: Optional[str]) -> bool:
+    label = source or "payload"
+    try:
+        json.loads(line)
+        return True
+    except json.JSONDecodeError as exc:
+        print(f"{label} is not valid JSON: {exc}")
+        return False
 
 
 def _post_with_retries(req: urlrequest.Request, attempts: int = 3) -> bool:

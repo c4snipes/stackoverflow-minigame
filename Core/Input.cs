@@ -10,11 +10,12 @@ namespace stackoverflow_minigame
     /// Manages asynchronous console input handling, allowing for non-blocking key reads,
     /// pausing/resuming input listening, and safe operation in constrained environments.
     /// </summary>
-    class Input : IDisposable
+    internal class Input : IDisposable
     {
         private readonly ConcurrentQueue<ConsoleKeyInfo> buffer = new();
         private readonly CancellationTokenSource cancellation = new();
         private readonly ManualResetEventSlim resumeSignal = new(true);
+        private readonly AutoResetEvent keySignal = new(false);
         private Thread? listener;
         private const int LISTENER_SHUTDOWN_TIMEOUT_MS = 1000;
 
@@ -32,7 +33,11 @@ namespace stackoverflow_minigame
                 Diagnostics.ReportFailure("Input.Start skipped because interactive input is unavailable.");
                 return;
             }
-            if (listener != null) return;
+            if (listener != null)
+            {
+                return;
+            }
+
             listener = new Thread(Listen)
             {
                 IsBackground = true,
@@ -65,6 +70,20 @@ namespace stackoverflow_minigame
 
         public bool TryReadKey(out ConsoleKeyInfo key) => buffer.TryDequeue(out key);
 
+        public bool WaitForKey(int timeoutMs, out ConsoleKeyInfo key)
+        {
+            if (buffer.TryDequeue(out key))
+            {
+                return true;
+            }
+            if (!keySignal.WaitOne(timeoutMs))
+            {
+                key = default;
+                return false;
+            }
+            return buffer.TryDequeue(out key);
+        }
+
         public void ClearBuffer()
         {
             while (buffer.TryDequeue(out _)) { }
@@ -73,6 +92,7 @@ namespace stackoverflow_minigame
         public IDisposable PauseListening()
         {
             resumeSignal.Reset();
+            ClearBuffer();
             return new ResumeHandle(this);
         }
 
@@ -95,20 +115,17 @@ namespace stackoverflow_minigame
                 {
                     break;
                 }
-                if (token.IsCancellationRequested) break;
+                if (token.IsCancellationRequested)
+                {
+                    break;
+                }
+
                 try
                 {
-                    if (Console.KeyAvailable)
+                    if (ConsoleSafe.WaitForKey(TimeSpan.FromMilliseconds(250), out var key))
                     {
-                        var key = Console.ReadKey(intercept: true);
                         buffer.Enqueue(key);
-                    }
-                    else
-                    {
-                        if (token.WaitHandle.WaitOne(2))
-                        {
-                            break;
-                        }
+                        keySignal.Set();
                     }
                 }
                 catch (InvalidOperationException ex)
@@ -131,7 +148,11 @@ namespace stackoverflow_minigame
 
         private static bool ProbeForConsoleInput()
         {
-            if (Console.IsInputRedirected) return false;
+            if (Console.IsInputRedirected)
+            {
+                return false;
+            }
+
             try
             {
                 _ = Console.KeyAvailable;
@@ -149,6 +170,7 @@ namespace stackoverflow_minigame
             Stop();
             cancellation.Dispose();
             resumeSignal.Dispose();
+            keySignal.Dispose();
         }
 
         private sealed class ResumeHandle : IDisposable
@@ -163,7 +185,11 @@ namespace stackoverflow_minigame
 
             public void Dispose()
             {
-                if (disposed) return;
+                if (disposed)
+                {
+                    return;
+                }
+
                 disposed = true;
                 owner.ResumeListening();
             }
