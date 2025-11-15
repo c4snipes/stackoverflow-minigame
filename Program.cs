@@ -33,7 +33,6 @@ namespace stackoverflow_minigame
                     leaderboardRequested = true;
                 }
             }
-
             if (leaderboardRequested)
             {
                 if (enableDiagnostics)
@@ -44,7 +43,6 @@ namespace stackoverflow_minigame
                 viewer.Run();
                 return;
             }
-
             Console.WriteLine("Tip: Launch with 'dotnet run', tap 'L' for the built-in leaderboard, or post to https://stackoverflow-minigame.fly.dev/scoreboard to update the shared board.\n");
             Game game = new Game();
             if (enableDiagnostics)
@@ -120,6 +118,7 @@ namespace stackoverflow_minigame
             Console.WriteLine("  dotnet run              # play the game (press 'L' for the overlay)");
             Console.WriteLine("  ./launch-leaderboard.sh # standalone leaderboard window");
             Console.WriteLine("  dotnet run -- trace     # enable verbose diagnostics for initials/glyphs");
+            
         }
     }
 }

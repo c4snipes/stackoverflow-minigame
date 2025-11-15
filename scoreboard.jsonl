@@ -1,3 +1,7 @@
 # Scoreboard entries are stored as JSON lines; do not edit manually unless you know what you're doing.
 
 {"id":"070b7540cab24fcead44c9cd99661300","initials":"CAS","level":12,"maxAltitude":343.4154,"runTimeTicks":246654420,"victory":false,"timestampUtc":"2025-11-15T01:25:03.251306Z","runTime":"00:00:24.6654420"}
+{"id":"09e2171fa6ce4e959c99317c0ec40648","initials":"CAS","level":0,"maxAltitude":59.424282,"runTimeTicks":38834730,"victory":false,"timestampUtc":"2025-11-15T02:32:08.656451Z","runTime":"00:00:03.8834730"}
+{"id":"a5faa9ea85b5426fb1e2afcd56a7edcc","initials":"CAS","level":24,"maxAltitude":631.41986,"runTimeTicks":446834483,"victory":false,"timestampUtc":"2025-11-15T02:32:58.004819Z","runTime":"00:00:44.6834483"}
+{"id":"410a7e9c06b647e38c8640f1b5bcf126","initials":"CAS","level":2,"maxAltitude":93.42085,"runTimeTicks":78582812,"victory":false,"timestampUtc":"2025-11-15T02:33:07.313433Z","runTime":"00:00:07.8582812"}
+{"id":"54075067c4614f94a1a24e4197f189f3","initials":"CAS","level":41,"maxAltitude":1108.4213,"runTimeTicks":707891935,"victory":false,"timestampUtc":"2025-11-15T02:34:18.897621Z","runTime":"00:01:10.7891935"}

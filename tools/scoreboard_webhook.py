@@ -22,6 +22,7 @@ import time
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
 from typing import Optional
 from urllib import error as urlerror
 from urllib import request as urlrequest
@@ -113,6 +114,11 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
             if not isinstance(line, str):
                 self.send_error(HTTPStatus.BAD_REQUEST, "line or line_b64 required.")
                 return
+            try:
+                json.loads(line)
+            except json.JSONDecodeError as exc:
+                self.send_error(HTTPStatus.BAD_REQUEST, f"line is not valid JSON: {exc.msg}")
+                return
             encoded = base64.b64encode(line.encode("utf-8")).decode("ascii")
 
         try:
@@ -174,7 +180,7 @@ def dispatch(encoded_line: str) -> None:
         req = urlrequest.Request(url, data=body, method="POST")
         req.add_header("Accept", "application/vnd.github+json")
         req.add_header("Authorization", f"token {CONFIG.token}")
-        req.add_header("Content-Type", "application/jsonl")
+        req.add_header("Content-Type", "application/json")
         req.add_header("User-Agent", "stackoverflow-minigame-webhook/1.0")
 
         try:
@@ -195,11 +201,15 @@ def dispatch(encoded_line: str) -> None:
     raise RuntimeError("GitHub dispatch failed after multiple attempts. Check webhook logs for details.")
 
 
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
+
+
 def build_server():
     host = os.environ.get(HOST_ENV, "0.0.0.0")
     port_value = os.environ.get(PORT_ENV) or os.environ.get(FALLBACK_PLATFORM_PORT_ENV) or "8080"
     port = int(port_value)
-    httpd = HTTPServer((host, port), ScoreboardHandler)
+    httpd = ThreadingHTTPServer((host, port), ScoreboardHandler)
     LOGGER.info("Listening on http://%s:%s/scoreboard", host, port)
     return httpd
 

@@ -29,8 +29,12 @@ namespace stackoverflow_minigame
             {
                 try
                 {
-                    cursorHidden = Console.CursorVisible;
-                    Console.CursorVisible = false;
+#if WINDOWS
+                                        cursorHidden = Console.CursorVisible;
+                                        Console.CursorVisible = false;
+#else
+                    cursorHidden = false;
+#endif
                 }
                 catch
                 {
@@ -52,20 +56,23 @@ namespace stackoverflow_minigame
             }
             finally
             {
-                if (shouldRestoreCursor)
+#if WINDOWS
+                                                Console.CursorVisible = cursorHidden;
+#endif
+                Console.WriteLine();
+                try
                 {
-                    try
-                    {
-                        Console.CursorVisible = cursorHidden;
-                        Console.WriteLine();
-                    }
-                    catch
-                    {
-                        // ignore cursor restore failures
-                    }
+                    Console.CursorVisible = cursorHidden;
+                    Console.WriteLine();
+                }
+                catch
+                {
+                    // ignore cursor restore failures
                 }
             }
+            // Removed extraneous closing brace here
         }
+
 
         // Waits for the refresh interval or a quit key press.
         // Returns true if a quit key was pressed.
@@ -91,6 +98,9 @@ namespace stackoverflow_minigame
             }
             return false;
         }
+        // Tries to read a quit key from the console input.
+        // <param name="quit">Outputs true if a quit key was pressed.</param>
+        // <returns>True if a key was read; otherwise, false.</returns> 
 
         private bool TryReadQuitKey(out bool quit)
         {
@@ -110,6 +120,9 @@ namespace stackoverflow_minigame
             }
             return true;
         }
+        // Draws the leaderboard to the console.
+        // <returns>True if drawing succeeded; otherwise, false.</returns>
+
 
         private bool Draw()
         {
@@ -163,6 +176,15 @@ namespace stackoverflow_minigame
         /// <summary>
         /// Writes a section of the leaderboard at a specified console position.
         /// </summary>
+        /// <param name="usePositioning">Whether to use console positioning.</param>
+        /// <param name="startRow">The starting row for the section.</param>
+        /// <param name="title">The title of the section.</param>
+        /// <param name="scores">The scores to display.</param>
+        /// <param name="consoleWidth">The width of the console.</param>
+        /// <param name="errorMessage">An optional error message to display.</param>
+        /// <returns>Nothing.</returns>
+        /// <remarks>If positioning is disabled, this method does nothing.</remarks>
+        /// 
         private void WriteSection(bool usePositioning, int startRow, string title, IReadOnlyList<ScoreEntry> scores, int consoleWidth, string? errorMessage)
         {
             if (!usePositioning) return;
@@ -182,7 +204,7 @@ namespace stackoverflow_minigame
             }
             WriteLineAt(row, string.Empty, consoleWidth);
         }
-// Pads the remaining rows in a section with empty entries.
+        // Pads the remaining rows in a section with empty entries.
         private int PadRemainingRows(int row, int consoleWidth)
         {
             for (int i = 0; i < EntriesToDisplay; i++)
@@ -193,6 +215,7 @@ namespace stackoverflow_minigame
             return row;
         }
 
+
         private void WriteLineAt(int row, string text, int consoleWidth)
         {
             string padded = text.Length > consoleWidth ? text[..consoleWidth] : text.PadRight(consoleWidth);
@@ -201,7 +224,8 @@ namespace stackoverflow_minigame
                 Console.Write(padded);
             }
         }
-//
+        // Renders the lines of a leaderboard section.
+
         private void RenderSectionLines(IReadOnlyList<ScoreEntry> scores, int consoleWidth, bool fastest)
         {
             if (scores.Count == 0)
