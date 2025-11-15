@@ -169,7 +169,13 @@ class ScoreRepository:
                     timestamp_utc=excluded.timestamp_utc
                 """,
                 {
-            de tampUtc"],
+                    "id": entry["id"],
+                    "initials": entry["initials"],
+                    "level": entry["level"],
+                    "max_altitude": entry["maxAltitude"],
+                    "run_time_ticks": entry["runTimeTicks"],
+                    "victory": int(entry["victory"]),
+                    "timestamp_utc": entry["timestampUtc"],
                 },
             )
 
@@ -178,13 +184,13 @@ class ScoreRepository:
 
         # Build SQL filter for time range
         where_clause = ""
-        params_top = [limit]
-        params_fast = [limit]
+        params_top: list[int] = [limit]
+        params_fast: list[int] = [limit]
 
         if since:
             where_clause = "WHERE timestamp_utc >= ?"
-            params_top = [since, limit]
-            params_fast = [since, limit]
+            params_top = [int(since), limit] if since.isdigit() else [limit]
+            params_fast = [int(since), limit] if since.isdigit() else [limit]
 
         with self._conn:
             # Top levels query
@@ -194,7 +200,7 @@ class ScoreRepository:
                 ORDER BY level DESC, run_time_ticks ASC
                 LIMIT ?
             """
-            top_rows = self._conn.execute(top_query, params_top).fetchall()
+            top_rows = self._conn.execute(top_query, tuple(params_top)).fetchall()
 
             # Fastest runs query
             fast_where = f"{where_clause} AND run_time_ticks > 0 AND level > 0" if where_clause else "WHERE run_time_ticks > 0 AND level > 0"

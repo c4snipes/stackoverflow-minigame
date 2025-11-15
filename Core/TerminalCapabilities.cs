@@ -77,28 +77,44 @@ namespace stackoverflow_minigame
         private static string DetermineTerminalType(string term, string termProgram, string wtSession)
         {
             if (!string.IsNullOrEmpty(wtSession))
+            {
                 return "Windows Terminal";
+            }
 
             if (termProgram.Contains("vscode", StringComparison.OrdinalIgnoreCase))
+            {
                 return "VS Code";
+            }
 
             if (termProgram.Contains("iTerm", StringComparison.OrdinalIgnoreCase))
+            {
                 return "iTerm2";
+            }
 
             if (termProgram.Contains("Apple_Terminal", StringComparison.OrdinalIgnoreCase))
+            {
                 return "macOS Terminal";
+            }
 
             if (term.Contains("xterm", StringComparison.OrdinalIgnoreCase))
+            {
                 return "xterm";
+            }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
                 return "Windows Console";
+            }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
                 return "Linux Terminal";
+            }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
                 return "macOS Terminal";
+            }
 
             return term != "" ? term : "Unknown";
         }
@@ -140,11 +156,15 @@ namespace stackoverflow_minigame
         {
             // Check for 256-color or truecolor support
             if (term.Contains("256color") || term.Contains("truecolor"))
+            {
                 return true;
+            }
 
             string colorTerm = Environment.GetEnvironmentVariable("COLORTERM") ?? "";
             if (colorTerm.Contains("truecolor") || colorTerm.Contains("24bit"))
+            {
                 return true;
+            }
 
             // Modern terminals typically support extended colors
             if (termProgram.Contains("iTerm") ||
@@ -163,7 +183,9 @@ namespace stackoverflow_minigame
             {
                 // Check encoding
                 if (Console.OutputEncoding.CodePage == 65001) // UTF-8
+                {
                     return true;
+                }
 
                 // Check environment variables
                 string lang = Environment.GetEnvironmentVariable("LANG") ?? "";
@@ -185,7 +207,9 @@ namespace stackoverflow_minigame
         private static bool DetectCursorControl()
         {
             if (Console.IsOutputRedirected)
+            {
                 return false;
+            }
 
             try
             {
@@ -204,7 +228,15 @@ namespace stackoverflow_minigame
         private static bool DetectConsoleTitleSupport()
         {
             if (Console.IsOutputRedirected)
+            {
                 return false;
+            }
+
+            // Console.Title is only supported on Windows
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return false;
+            }
 
             try
             {

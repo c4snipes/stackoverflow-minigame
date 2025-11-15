@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -60,13 +61,17 @@ namespace stackoverflow_minigame
             }
 
             layoutInitialized = false;
-            try
+            // Console.Title is only supported on Windows
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                Console.Title = "Stackoverflow Skyscraper - Leaderboard";
-            }
-            catch
-            {
-                // Ignore failures when the terminal does not expose a title.
+                try
+                {
+                    Console.Title = "Stackoverflow Skyscraper - Leaderboard";
+                }
+                catch
+                {
+                    // Ignore failures when the terminal does not expose a title.
+                }
             }
 
             try
