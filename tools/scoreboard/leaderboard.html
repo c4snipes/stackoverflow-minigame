@@ -157,32 +157,6 @@
         position: relative;
       }
 
-      .ascii-corners::before,
-      .ascii-corners::after {
-        position: absolute;
-        font-size: 1.5rem;
-        color: #00ff41;
-        line-height: 1;
-      }
-
-      .ascii-corners::before {
-        content: "┌────────────────────────────────────────┐";
-        top: -0.75rem;
-        left: -0.5rem;
-        right: -0.5rem;
-        white-space: nowrap;
-        overflow: hidden;
-      }
-
-      .ascii-corners::after {
-        content: "└────────────────────────────────────────┘";
-        bottom: -0.75rem;
-        left: -0.5rem;
-        right: -0.5rem;
-        white-space: nowrap;
-        overflow: hidden;
-      }
-
       header {
         text-align: center;
         margin-bottom: 3rem;
@@ -405,11 +379,6 @@
         th:nth-child(3), td:nth-child(3),
         th:nth-child(4), td:nth-child(4) {
           display: none;
-        }
-
-        .ascii-corners::before,
-        .ascii-corners::after {
-          font-size: 1rem;
         }
 
         footer {

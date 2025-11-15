@@ -169,13 +169,7 @@ class ScoreRepository:
                     timestamp_utc=excluded.timestamp_utc
                 """,
                 {
-                    "id": entry["id"],
-                    "initials": entry["initials"],
-                    "level": entry["level"],
-                    "max_altitude": entry["maxAltitude"],
-                    "run_time_ticks": entry["runTimeTicks"],
-                    "victory": 1 if entry["victory"] else 0,
-                    "timestamp_utc": entry["timestampUtc"],
+            de tampUtc"],
                 },
             )
 

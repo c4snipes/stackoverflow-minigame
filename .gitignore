@@ -87,3 +87,8 @@ mono_crash.*
 *.trunk/
 # End of https://www.toptal.com/developers/gitignore/api/visualstudio,windows,macos,monodevelop,rider
 .fake
+
+launch-demo.command
+PRESENTATION-SETUP.md
+create-launcher-app.sh
+Launch Demo.app
