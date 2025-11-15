@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """
-A tiny HTTPS-capable endpoint that receives scoreboard payloads from the game and
+A tiny HTTP endpoint (put it behind TLS with Fly/nginx/etc.) that receives scoreboard payloads from the game and
 triggers the GitHub repository_dispatch workflow on behalf of players.
 
 Configuration is done through environment variables:
   SCOREBOARD_HOST: Host interface to bind (default 0.0.0.0)
-  SCOREBOARD_PORT: Port to listen on (default 8443)
-  SCOREBOARD_TLS_CERT: Path to PEM certificate (optional)
-  SCOREBOARD_TLS_KEY: Path to PEM private key (required if CERT provided)
+  SCOREBOARD_PORT: Port to listen on (default 8080 if unset)
   SCOREBOARD_SECRET: Shared secret expected in X-Scoreboard-Secret header
   SCOREBOARD_REPO: GitHub repo in the form owner/name
   SCOREBOARD_GITHUB_TOKEN: PAT with repo contents:write scope
@@ -20,7 +18,7 @@ import json
 import logging
 import os
 import secrets
-import ssl
+import time
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -32,8 +30,6 @@ from urllib import request as urlrequest
 HOST_ENV = "SCOREBOARD_HOST"
 PORT_ENV = "SCOREBOARD_PORT"
 FALLBACK_PLATFORM_PORT_ENV = "PORT"
-CERT_ENV = "SCOREBOARD_TLS_CERT"
-KEY_ENV = "SCOREBOARD_TLS_KEY"
 SECRET_ENV = "SCOREBOARD_SECRET"
 REPO_ENV = "SCOREBOARD_REPO"
 TOKEN_ENV = "SCOREBOARD_GITHUB_TOKEN"
@@ -85,6 +81,17 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
             self.send_response(HTTPStatus.OK)
             self.end_headers()
             self.wfile.write(b"ok")
+            return
+        if self.path == "/scoreboard":
+            message = (
+                "This endpoint accepts POSTs from the game to sync the leaderboard. "
+                "Run 'dotnet run' and tap 'L' (or ./launch-leaderboard.sh) to view results locally, "
+                "or watch GitHub commits for updates."
+            )
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(message.encode("utf-8"))
             return
         self.send_error(HTTPStatus.NOT_FOUND, "Unknown path.")
 
@@ -161,39 +168,39 @@ def dispatch(encoded_line: str) -> None:
         "client_payload": {"line_b64": encoded_line},
     }
     body = json.dumps(payload).encode("utf-8")
-    req = urlrequest.Request(url, data=body, method="POST")
-    req.add_header("Accept", "application/vnd.github+json")
-    req.add_header("Authorization", f"token {CONFIG.token}")
-    req.add_header("Content-Type", "application/json")
-    req.add_header("User-Agent", "stackoverflow-minigame-webhook/1.0")
 
-    try:
-        with urlrequest.urlopen(req, timeout=15) as resp:
-            resp.read()
-    except urlerror.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        LOGGER.error("GitHub dispatch failed: %s %s %s", exc.code, exc.reason, detail)
-        raise RuntimeError(f"GitHub dispatch failed: {exc.code} {exc.reason} - {detail}") from exc
-    except urlerror.URLError as exc:
-        LOGGER.error("Network error while calling GitHub: %s", exc)
-        raise RuntimeError(f"Network error while calling GitHub: {exc}") from exc
+    backoff = 1.0
+    for attempt in range(5):
+        req = urlrequest.Request(url, data=body, method="POST")
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("Authorization", f"token {CONFIG.token}")
+        req.add_header("Content-Type", "application/jsonl")
+        req.add_header("User-Agent", "stackoverflow-minigame-webhook/1.0")
+
+        try:
+            with urlrequest.urlopen(req, timeout=15) as resp:
+                resp.read()
+            return
+        except urlerror.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            LOGGER.error("GitHub dispatch failed (attempt %s/5): %s %s %s", attempt + 1, exc.code, exc.reason, detail)
+            if 400 <= exc.code < 500 and exc.code != 429:
+                raise RuntimeError(f"GitHub dispatch failed: {exc.code} {exc.reason} - {detail}") from exc
+        except urlerror.URLError as exc:
+            LOGGER.error("Network error while calling GitHub (attempt %s/5): %s", attempt + 1, exc)
+
+        time.sleep(backoff)
+        backoff = min(backoff * 2, 10)
+
+    raise RuntimeError("GitHub dispatch failed after multiple attempts. Check webhook logs for details.")
 
 
 def build_server():
     host = os.environ.get(HOST_ENV, "0.0.0.0")
-    port = int(os.environ.get(PORT_ENV) or os.environ.get(FALLBACK_PLATFORM_PORT_ENV, "8443"))
+    port_value = os.environ.get(PORT_ENV) or os.environ.get(FALLBACK_PLATFORM_PORT_ENV) or "8080"
+    port = int(port_value)
     httpd = HTTPServer((host, port), ScoreboardHandler)
-    cert_path = os.environ.get(CERT_ENV)
-    key_path = os.environ.get(KEY_ENV)
-    if cert_path and key_path:
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain(certfile=cert_path, keyfile=key_path)
-        httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
-        scheme = "https"
-    else:
-        scheme = "http"
-        LOGGER.warning("TLS cert/key not provided; running without HTTPS.")
-    LOGGER.info("Listening on %s://%s:%s/scoreboard", scheme, host, port)
+    LOGGER.info("Listening on http://%s:%s/scoreboard", host, port)
     return httpd
 
 

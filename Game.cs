@@ -283,8 +283,8 @@ namespace stackoverflow_minigame {
         private void OverLoop() {
             Console.Clear();
             Console.WriteLine(playerWon ? "YOU CLEARED THE ERROR STACK!" : "*** STACKOVERFLOW EXCEPTION ***");
-            Console.WriteLine($"Score (landings): {framesClimbed}");
-            Console.WriteLine($"Best run: {bestFrames}");
+            Console.WriteLine($"Levels cleared: {framesClimbed}");
+            Console.WriteLine($"Best levels: {bestFrames}");
             Console.WriteLine($"Run time: {TimeFormatting.FormatDuration(runStopwatch.Elapsed)}");
             Console.WriteLine($"Player: {playerInitials}");
             Console.WriteLine();
@@ -337,6 +337,11 @@ namespace stackoverflow_minigame {
                         break;
                     case ConsoleKey.Q:
                     case ConsoleKey.Escape:
+                        if (state == GameState.Running)
+                        {
+                            playerWon = false;
+                            StopAndRecordRun();
+                        }
                         running = false;
                         return;
                 }

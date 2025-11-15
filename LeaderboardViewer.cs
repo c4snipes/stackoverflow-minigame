@@ -25,7 +25,6 @@ namespace stackoverflow_minigame
             bool singlePass = embedded ? false : Console.IsOutputRedirected;
             bool cursorHidden = false;
             bool shouldRestoreCursor = !singlePass;
-#pragma warning disable CA1416
             if (shouldRestoreCursor)
             {
                 try
@@ -38,7 +37,7 @@ namespace stackoverflow_minigame
                     shouldRestoreCursor = false;
                 }
             }
-#pragma warning restore CA1416
+
             layoutInitialized = false;
             try
             {
@@ -53,7 +52,6 @@ namespace stackoverflow_minigame
             }
             finally
             {
-#pragma warning disable CA1416
                 if (shouldRestoreCursor)
                 {
                     try
@@ -66,12 +64,13 @@ namespace stackoverflow_minigame
                         // ignore cursor restore failures
                     }
                 }
-#pragma warning restore CA1416
             }
         }
+
         // Waits for the refresh interval or a quit key press.
         // Returns true if a quit key was pressed.
         // <returns>True if a quit key was pressed; otherwise, false.</returns>
+
         private bool WaitOrQuit()
         {
             if (Console.IsInputRedirected)
@@ -121,6 +120,7 @@ namespace stackoverflow_minigame
                 Console.Clear();
                 layoutInitialized = canPosition;
                 Console.WriteLine("Stackoverflow Skyscraper - Leaderboard");
+                Console.WriteLine("Remote feed: https://stackoverflow-minigame.fly.dev/scoreboard");
                 Console.WriteLine(canPosition ? "Live Leaderboard (press Q or Esc to close)" : "Live Leaderboard");
                 Console.WriteLine(new string('=', 50));
                 if (canPosition)
@@ -177,18 +177,7 @@ namespace stackoverflow_minigame
             }
             for (int i = 0; i < EntriesToDisplay; i++)
             {
-                string line;
-                if (i < scores.Count)
-                {
-                    var entry = scores[i];
-                    line = fastest
-                        ? $"  {i + 1,2}. {entry.Initials,-3}  {TimeFormatting.FormatDuration(entry.RunTime),12}  {entry.Score,4} lvls"
-                        : $"  {i + 1,2}. {entry.Initials,-3}  {entry.Score,4} lvls  {TimeFormatting.FormatDuration(entry.RunTime)}";
-                }
-                else
-                {
-                    line = "  --";
-                }
+                string line = FormatLeaderboardLine(scores, i, fastest);
                 WriteLineAt(row++, line, consoleWidth);
             }
             WriteLineAt(row, string.Empty, consoleWidth);
@@ -222,12 +211,22 @@ namespace stackoverflow_minigame
             }
             for (int i = 0; i < scores.Count; i++)
             {
-                var entry = scores[i];
-                string line = fastest
-                    ? $"  {i + 1,2}. {entry.Initials,-3}  {TimeFormatting.FormatDuration(entry.RunTime),12}  {entry.Score,4} lvls"
-                    : $"  {i + 1,2}. {entry.Initials,-3}  {entry.Score,4} lvls  {TimeFormatting.FormatDuration(entry.RunTime)}";
+                string line = FormatLeaderboardLine(scores, i, fastest);
                 Console.WriteLine(line.Length > consoleWidth ? line[..consoleWidth] : line);
             }
+        }
+
+        private static string FormatLeaderboardLine(IReadOnlyList<ScoreEntry> scores, int index, bool fastest)
+        {
+            if (index >= scores.Count)
+            {
+                return "  --";
+            }
+
+            var entry = scores[index];
+            return fastest
+                ? $"  {index + 1,2}. {entry.Initials,-3}  {TimeFormatting.FormatDuration(entry.RunTime),12}  {entry.Score,4} lvls"
+                : $"  {index + 1,2}. {entry.Initials,-3}  {entry.Score,4} lvls  {TimeFormatting.FormatDuration(entry.RunTime)}";
         }
 
         private static void PrintScoreboardError(string? error)

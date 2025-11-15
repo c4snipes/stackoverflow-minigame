@@ -6,6 +6,7 @@ namespace stackoverflow_minigame
     {
         private const string LeaderboardArg = "leaderboard";
         private const string DiagnosticsArg = "trace";
+        private const string ModeEnvVar = "STACKOVERFLOW_MINIGAME_MODE";
         private static bool diagnosticsHooked;
 
         static void Main(string[] args)
@@ -22,8 +23,18 @@ namespace stackoverflow_minigame
                 return;
             }
             bool enableDiagnostics = parsedArgs.Remove(DiagnosticsArg);
+            bool leaderboardRequested = parsedArgs.Remove(LeaderboardArg);
+            if (!leaderboardRequested)
+            {
+                string? requestedMode = Environment.GetEnvironmentVariable(ModeEnvVar);
+                if (!string.IsNullOrWhiteSpace(requestedMode) &&
+                    requestedMode.Trim().Equals(LeaderboardArg, StringComparison.OrdinalIgnoreCase))
+                {
+                    leaderboardRequested = true;
+                }
+            }
 
-            if (parsedArgs.Remove(LeaderboardArg))
+            if (leaderboardRequested)
             {
                 if (enableDiagnostics)
                 {
@@ -34,7 +45,7 @@ namespace stackoverflow_minigame
                 return;
             }
 
-            Console.WriteLine("Tip: Run 'dotnet run -- leaderboard' or './launch-leaderboard.sh' in another tab to view live standings.\n");
+            Console.WriteLine("Tip: Launch with 'dotnet run', tap 'L' for the built-in leaderboard, or post to https://stackoverflow-minigame.fly.dev/scoreboard to update the shared board.\n");
             Game game = new Game();
             if (enableDiagnostics)
             {
@@ -106,8 +117,8 @@ namespace stackoverflow_minigame
         private static void PrintUsage()
         {
             Console.WriteLine("Usage:");
-            Console.WriteLine("  dotnet run              # run the game");
-            Console.WriteLine("  dotnet run -- leaderboard | ./launch-leaderboard.sh");
+            Console.WriteLine("  dotnet run              # play the game (press 'L' for the overlay)");
+            Console.WriteLine("  ./launch-leaderboard.sh # standalone leaderboard window");
             Console.WriteLine("  dotnet run -- trace     # enable verbose diagnostics for initials/glyphs");
         }
     }

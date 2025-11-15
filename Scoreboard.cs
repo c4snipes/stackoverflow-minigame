@@ -16,6 +16,7 @@ namespace stackoverflow_minigame
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
         public string Initials { get; set; } = "AAA";
+        [JsonPropertyName("level")]
         public int Score { get; set; }
         public float MaxAltitude { get; set; }
         public long RunTimeTicks { get; set; }
@@ -148,7 +149,7 @@ namespace stackoverflow_minigame
             {
                 var snapshot = RefreshEntriesFromDisk();
                 return snapshot
-                    .Where(e => e.RunTimeTicks > 0)
+                    .Where(e => e.RunTimeTicks > 0 && e.Score > 0)
                     .OrderBy(e => e.RunTimeTicks)
                     .ThenByDescending(e => e.Score)
                     .Take(count)

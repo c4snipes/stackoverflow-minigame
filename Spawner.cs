@@ -15,6 +15,7 @@ namespace stackoverflow_minigame
         private const float BandLevelTolerance = 0.2f;
         private const int MinGapCeiling = 4;
         private const int HeightDivisorForMaxGap = 2;
+        private const int MaxPlacementAttempts = 40;
 
         // Keeps the vertical bands populated by climbing upward, deriving gaps/extra platforms based on current progress.
         public void Update(World world)
@@ -61,18 +62,20 @@ namespace stackoverflow_minigame
         private void SpawnPlatformsAt(World world, float y, int count)
         {
             int placed = 0;
-            int safety = 0;
-            while (placed < count && safety < 40)
+            int attempts = 0;
+            while (placed < count && attempts < MaxPlacementAttempts)
             {
-                safety++;
+                attempts++;
                 if (TrySpawnPlatform(world, y))
                 {
                     placed++;
                 }
             }
+
             if (placed == 0)
             {
                 ForceSpawnPlatform(world, y);
+                Diagnostics.ReportInfo($"Spawner: forced platform at y={y:F2} after {attempts} attempts (level={world.LevelsCompleted}).");
             }
         }
 
