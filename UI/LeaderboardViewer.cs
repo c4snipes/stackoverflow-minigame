@@ -17,8 +17,11 @@ namespace stackoverflow_minigame
         private bool layoutInitialized;
         private int topSectionRow;
         private int fastestSectionRow;
+        private int statsSectionRow;
         private readonly HttpClient? remoteClient;
         private readonly Uri? remoteUri;
+        private DateTime? timeFilter = null;
+        private string timeFilterLabel = "All Time";
 
         public LeaderboardViewer()
         {
@@ -138,6 +141,32 @@ namespace stackoverflow_minigame
                 if (key.Key == ConsoleKey.Q || key.Key == ConsoleKey.Escape)
                 {
                     quit = true;
+                    return true;
+                }
+
+                // Handle time filter shortcuts
+                switch (key.Key)
+                {
+                    case ConsoleKey.A:
+                        timeFilter = null;
+                        timeFilterLabel = "All Time";
+                        layoutInitialized = false; // Force redraw
+                        break;
+                    case ConsoleKey.T:
+                        timeFilter = DateTime.UtcNow.Date;
+                        timeFilterLabel = "Today";
+                        layoutInitialized = false;
+                        break;
+                    case ConsoleKey.W:
+                        timeFilter = DateTime.UtcNow.AddDays(-7);
+                        timeFilterLabel = "This Week";
+                        layoutInitialized = false;
+                        break;
+                    case ConsoleKey.M:
+                        timeFilter = DateTime.UtcNow.AddDays(-30);
+                        timeFilterLabel = "This Month";
+                        layoutInitialized = false;
+                        break;
                 }
             }
             catch (InvalidOperationException)
@@ -170,11 +199,14 @@ namespace stackoverflow_minigame
                 {
                     ConsoleSafe.WriteLine($"Remote feed: {remoteUri}");
                 }
-                ConsoleSafe.WriteLine(canPosition ? "Live Leaderboard (press Q or Esc to close)" : "Live Leaderboard");
+                ConsoleSafe.WriteLine($"Time Range: {timeFilterLabel}");
+                ConsoleSafe.WriteLine(canPosition ? "Live Leaderboard (Q/Esc=quit, T=today, W=week, M=month, A=all)" : "Live Leaderboard");
                 ConsoleSafe.WriteLine(new string('=', 50));
                 if (canPosition)
                 {
-                    topSectionRow = Console.CursorTop;
+                    statsSectionRow = Console.CursorTop;
+                    int statsHeight = 4; // Title + 3 lines of stats
+                    topSectionRow = statsSectionRow + statsHeight;
                     int blockHeight = 1 + EntriesToDisplay + 1;
                     fastestSectionRow = topSectionRow + blockHeight;
                 }
@@ -182,6 +214,7 @@ namespace stackoverflow_minigame
 
             IReadOnlyList<ScoreEntry> topScores = Array.Empty<ScoreEntry>();
             IReadOnlyList<ScoreEntry> fastest = Array.Empty<ScoreEntry>();
+            GlobalStats stats = new GlobalStats();
             string? topError = null;
             string? fastError = null;
 
@@ -197,23 +230,29 @@ namespace stackoverflow_minigame
                 {
                     ConsoleSafe.WriteLine($"[warning] Remote leaderboard unavailable: {remoteError}");
                 }
-                if (!TryFetchScores(() => scoreboard.GetTopScores(EntriesToDisplay), "top scores", out topScores, out topError))
+                if (!TryFetchScores(() => scoreboard.GetTopScores(EntriesToDisplay, timeFilter), "top scores", out topScores, out topError))
                 {
                     WriteSection(canPosition, topSectionRow, "Top Levels", Array.Empty<ScoreEntry>(), consoleWidth, topError ?? string.Empty);
                     Environment.ExitCode = 1;
                     return false;
                 }
 
-                if (!TryFetchScores(() => scoreboard.GetFastestRuns(EntriesToDisplay), "fastest runs", out fastest, out fastError))
+                if (!TryFetchScores(() => scoreboard.GetFastestRuns(EntriesToDisplay, timeFilter), "fastest runs", out fastest, out fastError))
                 {
                     WriteSection(canPosition, fastestSectionRow, "Fastest Runs", Array.Empty<ScoreEntry>(), consoleWidth, fastError ?? string.Empty);
                     Environment.ExitCode = 1;
                     return false;
                 }
+
+                // Get global stats
+                stats = scoreboard.GetGlobalStats(timeFilter);
             }
 
             if (!layoutInitialized)
             {
+                ConsoleSafe.WriteLine("Global Stats:");
+                ConsoleSafe.WriteLine($"  Players: {stats.TotalPlayers}  |  Runs: {stats.TotalRuns}  |  Avg: {stats.AverageLevel}  |  Record: {stats.HighestLevel}  |  Fastest: {TimeFormatting.FormatDuration(stats.FastestTime)}  |  Top: {stats.TopPlayer}");
+                ConsoleSafe.WriteLine(string.Empty);
                 ConsoleSafe.WriteLine("Top Levels");
                 RenderSectionLines(topScores, consoleWidth, false);
                 ConsoleSafe.WriteLine(string.Empty);
@@ -222,6 +261,7 @@ namespace stackoverflow_minigame
                 return true;
             }
 
+            WriteStatsSection(canPosition, statsSectionRow, stats, consoleWidth);
             WriteSection(true, topSectionRow, "Top Levels", topScores, consoleWidth, null);
             WriteSection(true, fastestSectionRow, "Fastest Runs", fastest, consoleWidth, null);
             return true;
@@ -281,6 +321,20 @@ namespace stackoverflow_minigame
             {
                 Console.Write(padded);
             }
+        }
+
+        private void WriteStatsSection(bool usePositioning, int startRow, GlobalStats stats, int consoleWidth)
+        {
+            if (!usePositioning)
+            {
+                return;
+            }
+
+            int row = startRow;
+            WriteLineAt(row++, "Global Stats:", consoleWidth);
+            WriteLineAt(row++, $"  Players: {stats.TotalPlayers}  |  Runs: {stats.TotalRuns}  |  Avg Lvl: {stats.AverageLevel}  |  Record: {stats.HighestLevel}", consoleWidth);
+            WriteLineAt(row++, $"  Fastest: {TimeFormatting.FormatDuration(stats.FastestTime)}  |  Top Player: {stats.TopPlayer}  |  Speed King: {stats.FastestPlayer}", consoleWidth);
+            WriteLineAt(row, string.Empty, consoleWidth);
         }
         // Renders the lines of a leaderboard section.
 
