@@ -179,32 +179,110 @@ class ScoreRepository:
                 },
             )
 
-    def leaderboard(self, limit: int) -> Dict[str, object]:
+    def leaderboard(self, limit: int, since: Optional[str] = None) -> Dict[str, object]:
         limit = max(1, min(limit, 100))
+
+        # Build SQL filter for time range
+        where_clause = ""
+        params_top = [limit]
+        params_fast = [limit]
+
+        if since:
+            where_clause = "WHERE timestamp_utc >= ?"
+            params_top = [since, limit]
+            params_fast = [since, limit]
+
         with self._conn:
-            top_rows = self._conn.execute(
-                """
+            # Top levels query
+            top_query = f"""
                 SELECT * FROM scoreboard
+                {where_clause}
                 ORDER BY level DESC, run_time_ticks ASC
                 LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
-            fast_rows = self._conn.execute(
-                """
+            """
+            top_rows = self._conn.execute(top_query, params_top).fetchall()
+
+            # Fastest runs query
+            fast_where = f"{where_clause} AND run_time_ticks > 0 AND level > 0" if where_clause else "WHERE run_time_ticks > 0 AND level > 0"
+            fast_query = f"""
                 SELECT * FROM scoreboard
-                WHERE run_time_ticks > 0 AND level > 0
+                {fast_where}
                 ORDER BY run_time_ticks ASC, level DESC
                 LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
-            count_row = self._conn.execute(
-                "SELECT COUNT(*) AS count FROM scoreboard").fetchone()
+            """
+            fast_rows = self._conn.execute(fast_query, params_fast).fetchall()
+
+            # Count query
+            count_query = f"SELECT COUNT(*) AS count FROM scoreboard {where_clause}"
+            count_params = [since] if since else []
+            count_row = self._conn.execute(count_query, count_params).fetchone()
+
         return {
             "count": count_row["count"] if count_row else 0,
             "topLevels": [self._row_to_entry(row) for row in top_rows],
             "fastestRuns": [self._row_to_entry(row) for row in fast_rows],
+            "stats": self.get_global_stats(since),
+        }
+
+    def get_global_stats(self, since: Optional[str] = None) -> Dict[str, object]:
+        where_clause = "WHERE timestamp_utc >= ?" if since else ""
+        params = [since] if since else []
+
+        with self._conn:
+            # Get basic stats
+            stats_query = f"""
+                SELECT
+                    COUNT(DISTINCT initials) as total_players,
+                    COUNT(*) as total_runs,
+                    CAST(AVG(level) AS INTEGER) as average_level,
+                    MAX(level) as highest_level,
+                    MIN(CASE WHEN run_time_ticks > 0 THEN run_time_ticks END) as fastest_time_ticks
+                FROM scoreboard
+                {where_clause}
+            """
+            stats_row = self._conn.execute(stats_query, params).fetchone()
+
+            if not stats_row or stats_row["total_runs"] == 0:
+                return {
+                    "totalPlayers": 0,
+                    "totalRuns": 0,
+                    "averageLevel": 0,
+                    "highestLevel": 0,
+                    "fastestTimeTicks": 0,
+                    "topPlayer": "N/A",
+                    "fastestPlayer": "N/A",
+                }
+
+            # Get top player
+            top_player_query = f"""
+                SELECT initials, MAX(level) as max_level
+                FROM scoreboard
+                {where_clause}
+                GROUP BY initials
+                ORDER BY max_level DESC
+                LIMIT 1
+            """
+            top_player_row = self._conn.execute(top_player_query, params).fetchone()
+
+            # Get fastest player
+            fastest_player_query = f"""
+                SELECT initials
+                FROM scoreboard
+                {where_clause}
+                WHERE run_time_ticks > 0
+                ORDER BY run_time_ticks ASC
+                LIMIT 1
+            """
+            fastest_player_row = self._conn.execute(fastest_player_query, params).fetchone()
+
+        return {
+            "totalPlayers": stats_row["total_players"] or 0,
+            "totalRuns": stats_row["total_runs"] or 0,
+            "averageLevel": stats_row["average_level"] or 0,
+            "highestLevel": stats_row["highest_level"] or 0,
+            "fastestTimeTicks": stats_row["fastest_time_ticks"] or 0,
+            "topPlayer": top_player_row["initials"] if top_player_row else "N/A",
+            "fastestPlayer": fastest_player_row["initials"] if fastest_player_row else "N/A",
         }
 
     @staticmethod
@@ -324,13 +402,13 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"ok")
             return
         if parsed.path == "/":
-            limit = self._resolve_limit(parsed.query)
-            payload = REPOSITORY.leaderboard(limit)
+            limit, since = self._resolve_query_params(parsed.query)
+            payload = REPOSITORY.leaderboard(limit, since)
             self._write_html(payload)
             return
         if parsed.path in ("/scoreboard", "/leaderboard"):
-            limit = self._resolve_limit(parsed.query)
-            payload = REPOSITORY.leaderboard(limit)
+            limit, since = self._resolve_query_params(parsed.query)
+            payload = REPOSITORY.leaderboard(limit, since)
             self._write_json(payload)
             return
         self.send_error(HTTPStatus.NOT_FOUND, "Unknown path.")
@@ -400,18 +478,48 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: object):
         LOGGER.info("%s - - %s", self.address_string(), format % args)
 
-    def _resolve_limit(self, query: str) -> int:
+    def _resolve_query_params(self, query: str) -> tuple[int, Optional[str]]:
+        """Parse limit and since parameters from query string.
+
+        Supported parameters:
+        - limit: number of entries to return (1-100)
+        - since: ISO timestamp or relative time (today, week, month)
+        """
         if not query:
-            return LEADERBOARD_LIMIT_DEFAULT
+            return LEADERBOARD_LIMIT_DEFAULT, None
+
         params = urlparse.parse_qs(query)
-        value = params.get("limit")
-        if not value:
-            return LEADERBOARD_LIMIT_DEFAULT
-        try:
-            parsed = int(value[0])
-            return max(1, min(100, parsed))
-        except (TypeError, ValueError):
-            return LEADERBOARD_LIMIT_DEFAULT
+
+        # Parse limit
+        limit = LEADERBOARD_LIMIT_DEFAULT
+        limit_value = params.get("limit")
+        if limit_value:
+            try:
+                limit = max(1, min(100, int(limit_value[0])))
+            except (TypeError, ValueError):
+                pass
+
+        # Parse since parameter
+        since = None
+        since_value = params.get("since")
+        if since_value:
+            since_str = since_value[0].lower()
+            now = datetime.now(timezone.utc)
+
+            # Handle relative time ranges
+            if since_str == "today":
+                since = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+            elif since_str == "week":
+                from datetime import timedelta
+                since = (now - timedelta(days=7)).isoformat()
+            elif since_str == "month":
+                from datetime import timedelta
+                since = (now - timedelta(days=30)).isoformat()
+            else:
+                # Assume it's an ISO timestamp
+                since = since_str
+
+        return limit, since
 
     def _write_json(self, payload: dict[str, object]) -> None:
         body = json.dumps(payload).encode("utf-8")

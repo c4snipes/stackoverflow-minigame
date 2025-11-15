@@ -27,6 +27,20 @@ namespace stackoverflow_minigame
         public ScoreEntry Clone() => (ScoreEntry)MemberwiseClone();
     }
 
+    internal class GlobalStats
+    {
+        public int TotalPlayers { get; set; }
+        public int TotalRuns { get; set; }
+        public int AverageLevel { get; set; }
+        public int HighestLevel { get; set; }
+        public long FastestTimeTicks { get; set; }
+        public string TopPlayer { get; set; } = "N/A";
+        public string FastestPlayer { get; set; } = "N/A";
+
+        [JsonIgnore]
+        public TimeSpan FastestTime => TimeSpan.FromTicks(FastestTimeTicks);
+    }
+
     internal class Scoreboard
     {
         public const string DefaultFileName = "scoreboard.jsonl";
@@ -161,6 +175,84 @@ namespace stackoverflow_minigame
                     .Take(count)
                     .Select(e => e.Clone())
                     .ToList();
+            }
+        }
+
+        public IReadOnlyList<ScoreEntry> GetTopScores(int count, DateTime? since)
+        {
+            lock (sync)
+            {
+                var snapshot = RefreshEntriesFromDisk();
+                var filtered = since.HasValue
+                    ? snapshot.Where(e => e.TimestampUtc >= since.Value)
+                    : snapshot;
+                return filtered
+                    .OrderByDescending(e => e.Level)
+                    .ThenBy(e => e.RunTimeTicks)
+                    .Take(count)
+                    .Select(e => e.Clone())
+                    .ToList();
+            }
+        }
+
+        public IReadOnlyList<ScoreEntry> GetFastestRuns(int count, DateTime? since)
+        {
+            lock (sync)
+            {
+                var snapshot = RefreshEntriesFromDisk();
+                var filtered = since.HasValue
+                    ? snapshot.Where(e => e.TimestampUtc >= since.Value)
+                    : snapshot;
+                return filtered
+                    .Where(e => e.RunTimeTicks > 0 && e.Level > 0)
+                    .OrderBy(e => e.RunTimeTicks)
+                    .ThenByDescending(e => e.Level)
+                    .Take(count)
+                    .Select(e => e.Clone())
+                    .ToList();
+            }
+        }
+
+        public GlobalStats GetGlobalStats(DateTime? since = null)
+        {
+            lock (sync)
+            {
+                var snapshot = RefreshEntriesFromDisk();
+                var filtered = since.HasValue
+                    ? snapshot.Where(e => e.TimestampUtc >= since.Value).ToList()
+                    : snapshot;
+
+                if (filtered.Count == 0)
+                {
+                    return new GlobalStats();
+                }
+
+                var uniquePlayers = filtered.Select(e => e.Initials).Distinct().Count();
+                var totalRuns = filtered.Count;
+                var averageLevel = (int)Math.Round(filtered.Average(e => e.Level));
+                var highestLevel = filtered.Max(e => e.Level);
+                var fastestTime = filtered.Where(e => e.RunTimeTicks > 0).Any()
+                    ? filtered.Where(e => e.RunTimeTicks > 0).Min(e => e.RunTimeTicks)
+                    : 0;
+                var topPlayer = filtered
+                    .GroupBy(e => e.Initials)
+                    .OrderByDescending(g => g.Max(e => e.Level))
+                    .FirstOrDefault()?.Key ?? "N/A";
+                var fastestPlayer = filtered
+                    .Where(e => e.RunTimeTicks > 0)
+                    .OrderBy(e => e.RunTimeTicks)
+                    .FirstOrDefault()?.Initials ?? "N/A";
+
+                return new GlobalStats
+                {
+                    TotalPlayers = uniquePlayers,
+                    TotalRuns = totalRuns,
+                    AverageLevel = averageLevel,
+                    HighestLevel = highestLevel,
+                    FastestTimeTicks = fastestTime,
+                    TopPlayer = topPlayer,
+                    FastestPlayer = fastestPlayer
+                };
             }
         }
 

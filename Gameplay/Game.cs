@@ -313,9 +313,17 @@ namespace stackoverflow_minigame
                 }
                 ClampPlayerWithinBounds();
                 spawner.Update(world);
+
+                // Audio feedback for landing
+                if (world.LandedThisFrame)
+                {
+                    TryPlayTone(800, 50); // Mid tone for landing
+                }
+
                 if (world.LevelAwardedThisFrame)
                 {
                     framesClimbed += 1;
+                    TryPlayTone(1200, 100); // Higher tone for level up
                 }
 
                 if (world.Player.Y < world.Offset)
@@ -619,6 +627,19 @@ namespace stackoverflow_minigame
             }
             int playableRows = Math.Max(1, consoleHeight - totalPadding);
             world.SetVisibleRowBudget(playableRows);
+        }
+
+        // Plays an audio tone using Console.Beep if supported
+        private static void TryPlayTone(int frequency, int duration)
+        {
+            try
+            {
+                Console.Beep(frequency, duration);
+            }
+            catch
+            {
+                // Console.Beep not supported on this platform, silently ignore
+            }
         }
 
     }
