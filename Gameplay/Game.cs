@@ -291,11 +291,9 @@ namespace stackoverflow_minigame
 
                     Console.ResetColor();
 
-                    if (OperatingSystem.IsWindows())
-                    {
-                        int frequency = 400 + (i * 100);
-                        TryPlayTone(frequency, 200);
-                    }
+                    // Play ascending tones for countdown
+                    int frequency = 400 + (i * 100);
+                    TryPlayTone(frequency, 200);
 
                     Thread.Sleep(1000);
                 }
@@ -322,10 +320,8 @@ namespace stackoverflow_minigame
 
                 Console.ResetColor();
 
-                if (OperatingSystem.IsWindows())
-                {
-                    TryPlayTone(1000, 200);
-                }
+                // Play final "go" tone
+                TryPlayTone(1000, 200);
 
                 Thread.Sleep(500);
             }
@@ -418,19 +414,13 @@ namespace stackoverflow_minigame
                 // Audio feedback for landing
                 if (world.LandedThisFrame)
                 {
-                    if (OperatingSystem.IsWindows())
-                    {
-                        TryPlayTone(800, 50); // Mid tone for landing
-                    }
+                    TryPlayTone(800, 50); // Mid tone for landing
                 }
 
                 if (world.LevelAwardedThisFrame)
                 {
                     framesClimbed += 1;
-                    if (OperatingSystem.IsWindows())
-                    {
-                        TryPlayTone(1200, 100); // Higher tone for level up
-                    }
+                    TryPlayTone(1200, 100); // Higher tone for level up
                 }
 
                 if (world.Player.Y < world.Offset)
@@ -736,18 +726,30 @@ namespace stackoverflow_minigame
             world.SetVisibleRowBudget(playableRows);
         }
 
-        // Plays an audio tone using Console.Beep if supported (Windows only)
-        // Gracefully falls back to silent operation on unsupported platforms
-        [SupportedOSPlatform("windows")]
+        /// <summary>
+        /// Plays an audio tone. On Windows uses Console.Beep with specified frequency.
+        /// On other platforms, uses terminal bell (BEL character) for cross-platform support.
+        /// </summary>
         private static void TryPlayTone(int frequency, int duration)
         {
             try
             {
-                Console.Beep(frequency, duration);
+                if (OperatingSystem.IsWindows())
+                {
+                    // Windows: Use Console.Beep with specific frequency
+                    Console.Beep(frequency, duration);
+                }
+                else
+                {
+                    // Unix/macOS/Linux: Use terminal bell (ASCII BEL character)
+                    // Most terminals will play a system beep sound
+                    Console.Write('\a');
+                    Console.Out.Flush();
+                }
             }
             catch
             {
-                // Console.Beep not supported on this platform, silently ignore
+                // Audio not supported, silently ignore
             }
         }
 
