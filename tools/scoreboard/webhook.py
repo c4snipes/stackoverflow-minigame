@@ -32,6 +32,8 @@ EVENT_ENV = "SCOREBOARD_EVENT"
 API_ENV = "SCOREBOARD_API_BASE"
 DB_ENV = "SCOREBOARD_DB_PATH"
 DEFAULT_DB_PATH = "/data/scoreboard.db"
+JSONL_ENV = "SCOREBOARD_JSONL_PATH"
+DEFAULT_JSONL_PATH = "/data/scoreboard.jsonl"
 LEADERBOARD_LIMIT_ENV = "SCOREBOARD_LEADERBOARD_LIMIT"
 MAX_PAYLOAD_BYTES = 4096
 
@@ -125,11 +127,18 @@ class ScoreEntryDict(TypedDict):
 
 
 class ScoreRepository:
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, jsonl_path: str):
         resolved = Path(db_path).expanduser()
         if resolved.parent and not resolved.parent.exists():
             resolved.parent.mkdir(parents=True, exist_ok=True)
         self.path = str(resolved)
+
+        # Set up JSON file path
+        jsonl_resolved = Path(jsonl_path).expanduser()
+        if jsonl_resolved.parent and not jsonl_resolved.parent.exists():
+            jsonl_resolved.parent.mkdir(parents=True, exist_ok=True)
+        self.jsonl_path = str(jsonl_resolved)
+
         try:
             self._conn = sqlite3.connect(self.path, check_same_thread=False)
         except sqlite3.Error as exc:
@@ -155,6 +164,7 @@ class ScoreRepository:
             )
 
     def upsert_entry(self, entry: ScoreEntryDict) -> None:
+        # Write to SQLite
         with self._conn:
             self._conn.execute(
                 """
@@ -178,6 +188,14 @@ class ScoreRepository:
                     "timestamp_utc": entry["timestampUtc"],
                 },
             )
+
+        # Also write to JSON file (append-only)
+        try:
+            with open(self.jsonl_path, 'a', encoding='utf-8') as f:
+                json.dump(entry, f)
+                f.write('\n')
+        except OSError as exc:
+            LOGGER.warning("Failed to write to JSON file %s: %s", self.jsonl_path, exc)
 
     def leaderboard(self, limit: int, since: Optional[str] = None) -> Dict[str, object]:
         limit = max(1, min(limit, 100))
@@ -305,6 +323,13 @@ def resolve_db_path() -> str:
     return DEFAULT_DB_PATH
 
 
+def resolve_jsonl_path() -> str:
+    env_path = _normalize(os.environ.get(JSONL_ENV))
+    if env_path:
+        return env_path
+    return DEFAULT_JSONL_PATH
+
+
 def resolve_leaderboard_limit() -> int:
     raw = _normalize(os.environ.get(LEADERBOARD_LIMIT_ENV))
     if not raw:
@@ -316,7 +341,7 @@ def resolve_leaderboard_limit() -> int:
 
 
 try:
-    REPOSITORY = ScoreRepository(resolve_db_path())
+    REPOSITORY = ScoreRepository(resolve_db_path(), resolve_jsonl_path())
 except SystemExit:
     raise
 except Exception as exc:  # noqa: BLE001
@@ -686,6 +711,7 @@ def main():
     LOGGER.info("Loaded configuration: repo=%s event=%s api_base=%s secret=%s",
                 CONFIG.repo, CONFIG.event_type, CONFIG.api_base, "set" if CONFIG.secret else "unset")
     LOGGER.info("Using SQLite database at %s", REPOSITORY.path)
+    LOGGER.info("Using JSON file at %s", REPOSITORY.jsonl_path)
     LOGGER.info("Rate limiting enabled: %d requests per %d seconds per IP",
                 RATE_LIMITER.max_requests, RATE_LIMITER.window_seconds)
     server = build_server()
