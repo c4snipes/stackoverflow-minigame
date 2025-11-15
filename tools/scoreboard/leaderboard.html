@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Stackoverflow Skyscraper — Leaderboard</title>
+    <style>
+      body {
+        font-family: system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+        background: #0f0f0f;
+        color: #f2f2f2;
+        padding: 2rem;
+      }
+      h1 {
+        margin-bottom: 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+      }
+      th,
+      td {
+        padding: 0.4rem;
+        border-bottom: 1px solid #444;
+        text-align: left;
+      }
+      th {
+        color: #ddd;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.08em;
+      }
+      tr:nth-child(even) {
+        background: #1a1a1a;
+      }
+      a {
+        color: #66d9ff;
+      }
+      footer {
+        margin-top: 2rem;
+        font-size: 0.85rem;
+        color: #999;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Stackoverflow Skyscraper — Leaderboard</h1>
+    <p>
+      Remote feed served from Fly.io — POST runs to <code>/scoreboard</code> to
+      append new entries.
+    </p>
+    <section>
+      <h2>Top Levels</h2>
+      {{TOP_LEVELS}}
+    </section>
+    <section>
+      <h2>Fastest Runs</h2>
+      {{FASTEST_RUNS}}
+    </section>
+    <footer>
+      <p>
+        View source or contribute at
+        <a href="https://github.com/c4snipes/stackoverflow-minigame"
+          >github.com/c4snipes/stackoverflow-minigame</a
+        >.
+      </p>
+    </footer>
+  </body>
+</html>

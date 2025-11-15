@@ -10,7 +10,7 @@ on:
         required: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   append:
@@ -24,29 +24,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Append scoreboard entry
+      - name: Validate webhook secrets
+        env:
+          STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL: ${{ secrets.STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL }}
+          STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET: ${{ secrets.STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET }}
+        run: |
+          if [[ -z "$STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL" ]]; then
+            echo "STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL secret is missing."
+            exit 1
+          fi
+          if [[ -z "$STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET" ]]; then
+            echo "STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET secret is missing."
+            exit 1
+          fi
+
+      - name: Forward entry to Fly webhook
         env:
           PAYLOAD: ${{ github.event_name == 'workflow_dispatch' && inputs.line_b64 || github.event.client_payload.line_b64 }}
+          STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL: ${{ secrets.STACKOVERFLOW_SCOREBOARD_WEBHOOK_URL }}
+          STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET: ${{ secrets.STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET }}
         run: |
           if [[ -z "$PAYLOAD" ]]; then
             echo "No payload supplied; skipping append."
             exit 0
           fi
-
-          python tools/append_scoreboard_entry.py
-
-      - name: Commit and push (if needed)
-        run: |
-          if git status --short scoreboard.jsonl | grep -q .; then
-            git config user.name "Scoreboard Bot"
-            git config user.email "scoreboard-bot@users.noreply.github.com"
-            current_branch="$(git rev-parse --abbrev-ref HEAD)"
-            git stash --include-untracked
-            git pull --rebase origin "$current_branch"
-            git stash pop || true
-            git add scoreboard.jsonl
-            git commit -m "Append scoreboard entry"
-            git push
-          else
-            echo "No scoreboard changes to commit."
-          fi
+          python3 tools/scoreboard/forward_payload.py

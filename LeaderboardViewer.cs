@@ -1,5 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 
 namespace stackoverflow_minigame
@@ -13,10 +17,21 @@ namespace stackoverflow_minigame
         private bool layoutInitialized;
         private int topSectionRow;
         private int fastestSectionRow;
+        private readonly HttpClient? remoteClient;
+        private readonly Uri? remoteUri;
 
         public LeaderboardViewer()
         {
             scoreboard = new Scoreboard(Scoreboard.ResolveDefaultPath());
+            remoteUri = ResolveRemoteUri();
+            if (remoteUri != null)
+            {
+                remoteClient = new HttpClient
+                {
+                    Timeout = TimeSpan.FromSeconds(5)
+                };
+                remoteClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            }
         }
 
         public void Run(bool embedded = false)
@@ -133,7 +148,10 @@ namespace stackoverflow_minigame
                 Console.Clear();
                 layoutInitialized = canPosition;
                 Console.WriteLine("Stackoverflow Skyscraper - Leaderboard");
-                Console.WriteLine("Remote feed: https://stackoverflow-minigame.fly.dev/scoreboard");
+                if (remoteUri != null)
+                {
+                    Console.WriteLine($"Remote feed: {remoteUri}");
+                }
                 Console.WriteLine(canPosition ? "Live Leaderboard (press Q or Esc to close)" : "Live Leaderboard");
                 Console.WriteLine(new string('=', 50));
                 if (canPosition)
@@ -144,18 +162,33 @@ namespace stackoverflow_minigame
                 }
             }
 
-            if (!TryFetchScores(() => scoreboard.GetTopScores(EntriesToDisplay), "top scores", out var topScores, out var topError))
-            {
-                WriteSection(canPosition, topSectionRow, "Top Levels", new List<ScoreEntry>(), consoleWidth, topError ?? string.Empty);
-                Environment.ExitCode = 1;
-                return false;
-            }
+            IReadOnlyList<ScoreEntry> topScores = Array.Empty<ScoreEntry>();
+            IReadOnlyList<ScoreEntry> fastest = Array.Empty<ScoreEntry>();
+            string? topError = null;
+            string? fastError = null;
 
-            if (!TryFetchScores(() => scoreboard.GetFastestRuns(EntriesToDisplay), "fastest runs", out var fastest, out var fastError))
+            if (TryFetchRemoteLeaderboard(out var remoteTop, out var remoteFast, out var remoteError))
             {
-                WriteSection(canPosition, fastestSectionRow, "Fastest Runs", new List<ScoreEntry>(), consoleWidth, fastError ?? string.Empty);
-                Environment.ExitCode = 1;
-                return false;
+                topScores = remoteTop;
+                fastest = remoteFast;
+                topError = remoteError;
+                fastError = remoteError;
+            }
+            else
+            {
+                if (!TryFetchScores(() => scoreboard.GetTopScores(EntriesToDisplay), "top scores", out topScores, out topError))
+                {
+                    WriteSection(canPosition, topSectionRow, "Top Levels", new List<ScoreEntry>(), consoleWidth, topError ?? string.Empty);
+                    Environment.ExitCode = 1;
+                    return false;
+                }
+
+                if (!TryFetchScores(() => scoreboard.GetFastestRuns(EntriesToDisplay), "fastest runs", out fastest, out fastError))
+                {
+                    WriteSection(canPosition, fastestSectionRow, "Fastest Runs", new List<ScoreEntry>(), consoleWidth, fastError ?? string.Empty);
+                    Environment.ExitCode = 1;
+                    return false;
+                }
             }
 
             if (!layoutInitialized)
@@ -265,6 +298,48 @@ namespace stackoverflow_minigame
             }
         }
 
+        private bool TryFetchRemoteLeaderboard(out IReadOnlyList<ScoreEntry> topScores, out IReadOnlyList<ScoreEntry> fastestRuns, out string? error)
+        {
+            topScores = Array.Empty<ScoreEntry>();
+            fastestRuns = Array.Empty<ScoreEntry>();
+            error = null;
+            if (remoteClient == null || remoteUri == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                using HttpResponseMessage response = remoteClient.GetAsync(remoteUri).GetAwaiter().GetResult();
+                if (!response.IsSuccessStatusCode)
+                {
+                    error = $"Remote feed returned {(int)response.StatusCode}";
+                    return false;
+                }
+
+                using var stream = response.Content.ReadAsStream();
+                var payload = JsonSerializer.Deserialize<RemoteLeaderboardResponse>(stream, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                if (payload == null)
+                {
+                    error = "Remote feed returned an empty payload.";
+                    return false;
+                }
+
+                topScores = payload.TopLevels ?? (IReadOnlyList<ScoreEntry>)Array.Empty<ScoreEntry>();
+                fastestRuns = payload.FastestRuns ?? (IReadOnlyList<ScoreEntry>)Array.Empty<ScoreEntry>();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Diagnostics.ReportFailure("Failed to fetch the remote leaderboard.", ex);
+                error = ex.Message;
+                return false;
+            }
+        }
+
         private static bool TryFetchScores(Func<IReadOnlyList<ScoreEntry>> fetch, string label, out IReadOnlyList<ScoreEntry> scores, out string? errorMessage)
         {
             try
@@ -281,6 +356,30 @@ namespace stackoverflow_minigame
                 return false;
             }
             // End of TryFetchScores
+        }
+
+        private static Uri? ResolveRemoteUri()
+        {
+            string? raw = Environment.GetEnvironmentVariable("STACKOVERFLOW_SCOREBOARD_REMOTE_URL");
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                raw = "https://stackoverflow-minigame.fly.dev/scoreboard";
+            }
+            if (Uri.TryCreate(raw, UriKind.Absolute, out Uri? uri))
+            {
+                return uri;
+            }
+            Diagnostics.ReportFailure($"Invalid remote leaderboard URL: {raw}", new UriFormatException());
+            return null;
+        }
+
+        private sealed class RemoteLeaderboardResponse
+        {
+            [JsonPropertyName("topLevels")]
+            public List<ScoreEntry>? TopLevels { get; set; }
+
+            [JsonPropertyName("fastestRuns")]
+            public List<ScoreEntry>? FastestRuns { get; set; }
         }
     }
 }

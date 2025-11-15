@@ -14,10 +14,14 @@ primary_region = "iad"
   [[services.ports]]
     port = 80
     handlers = ["http"]
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
+[[services.ports]]
+  port = 443
+  handlers = ["tls", "http"]
 
   [services.concurrency]
     hard_limit = 25
     soft_limit = 20
+
+[[mounts]]
+  source = "scoreboard_data"
+  destination = "/data"

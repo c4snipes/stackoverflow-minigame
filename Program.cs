@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace stackoverflow_minigame
 {
@@ -23,16 +24,7 @@ namespace stackoverflow_minigame
                 return;
             }
             bool enableDiagnostics = parsedArgs.Remove(DiagnosticsArg);
-            bool leaderboardRequested = parsedArgs.Remove(LeaderboardArg);
-            if (!leaderboardRequested)
-            {
-                string? requestedMode = Environment.GetEnvironmentVariable(ModeEnvVar);
-                if (!string.IsNullOrWhiteSpace(requestedMode) &&
-                    requestedMode.Trim().Equals(LeaderboardArg, StringComparison.OrdinalIgnoreCase))
-                {
-                    leaderboardRequested = true;
-                }
-            }
+            bool leaderboardRequested = ShouldLaunchLeaderboard(parsedArgs);
             if (leaderboardRequested)
             {
                 if (enableDiagnostics)
@@ -43,7 +35,7 @@ namespace stackoverflow_minigame
                 viewer.Run();
                 return;
             }
-            Console.WriteLine("Tip: Launch with 'dotnet run', tap 'L' for the built-in leaderboard, or post to https://stackoverflow-minigame.fly.dev/scoreboard to update the shared board.\n");
+            Console.WriteLine("Tip: Launch with 'dotnet run', tap 'L' for the built-in leaderboard, or visit https://stackoverflow-minigame.fly.dev/ for the live feed.\n");
             Game game = new Game();
             if (enableDiagnostics)
             {
@@ -59,8 +51,20 @@ namespace stackoverflow_minigame
             finally
             {
                 Tracing.Dispose();
-                // No cleanup needed for diagnosticsHooked here.
+                diagnosticsHooked = false;
             }
+        }
+
+        private static bool ShouldLaunchLeaderboard(HashSet<string> parsedArgs)
+        {
+            if (parsedArgs.Remove(LeaderboardArg))
+            {
+                return true;
+            }
+
+            string? requestedMode = Environment.GetEnvironmentVariable(ModeEnvVar);
+            return !string.IsNullOrWhiteSpace(requestedMode) &&
+                   requestedMode.Trim().Equals(LeaderboardArg, StringComparison.OrdinalIgnoreCase);
         }
 
         // Central place to wire verbose diagnostics so --trace lights up every relevant event without scattering hooks.
@@ -91,7 +95,19 @@ namespace stackoverflow_minigame
             foreach (string raw in args)
             {
                 if (string.IsNullOrWhiteSpace(raw)) continue;
-                string trimmed = raw.Trim().TrimStart('-');
+                string trimmedRaw = raw.Trim();
+                int dashCount = 0;
+                while (dashCount < trimmedRaw.Length && trimmedRaw[dashCount] == '-')
+                {
+                    dashCount++;
+                }
+                if (dashCount > 2)
+                {
+                    parseError = true;
+                    Console.WriteLine($"Unsupported option syntax: '{raw}'. Use '-' or '--' (e.g., --trace).");
+                    continue;
+                }
+                string trimmed = dashCount > 0 ? trimmedRaw[dashCount..] : trimmedRaw;
                 if (string.IsNullOrEmpty(trimmed)) continue;
                 if (trimmed.Contains('='))
                 {
@@ -114,11 +130,18 @@ namespace stackoverflow_minigame
         // Prints usage information to the console.
         private static void PrintUsage()
         {
-            Console.WriteLine("Usage:");
-            Console.WriteLine("  dotnet run              # play the game (press 'L' for the overlay)");
-            Console.WriteLine("  ./launch-leaderboard.sh # standalone leaderboard window");
-            Console.WriteLine("  dotnet run -- trace     # enable verbose diagnostics for initials/glyphs");
-            
+            try
+            {
+                Console.WriteLine("Usage:");
+                Console.WriteLine("  dotnet run                                   # play (tap 'L' for the overlay)");
+                Console.WriteLine("  STACKOVERFLOW_MINIGAME_MODE=leaderboard dotnet run");
+                Console.WriteLine("                                               # standalone leaderboard (same as https://stackoverflow-minigame.fly.dev/)");
+                Console.WriteLine("  dotnet run -- trace                          # verbose diagnostics");
+            }
+            catch (IOException ex)
+            {
+                Diagnostics.ReportFailure("Failed to print usage information.", ex);
+            }
         }
     }
 }

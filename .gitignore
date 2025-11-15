@@ -11,6 +11,11 @@ obj/
 *.userosscache
 *.sln.docstates
 .idea/
+*.__pycache__
+tools/scoreboard/__pycache__
+.__pycache__/
+
+
 
 
 # VS Code
@@ -40,7 +45,42 @@ obj/
 .github/instructions/codacy.instructions.md
 .codebuddy
 .env
-# FAKE build tool artifacts
-.fake
 
+# PDF documentation
 .project3_CSharp_Console_2025F.pdf
+*.log
+*.tmp
+*.bak
+*.old
+*.orig
+*.swp
+*~
+# NuGet packages
+*.nupkg
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+# Folder config file
+Desktop.ini
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+# Windows Installer files
+*.cab
+*.msi
+*.msm
+*.msp
+# JetBrains Rider
+.idea/
+*.sln.iml
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+# Mono Auto Generated Files
+mono_crash.*
+# Windows shortcuts
+*.lnk
+
+# End of https://www.toptal.com/developers/gitignore/api/visualstudio,windows,macos,monodevelop,rider

@@ -26,6 +26,7 @@ namespace stackoverflow_minigame
         public bool LandedThisFrame { get; private set; }
         public bool LevelAwardedThisFrame { get; private set; }
         public bool BorderHitThisFrame { get; private set; }
+        public bool DoomfallActive { get; private set; }
         private const float GroundHorizontalUnitsPerSecond = 15f;
         private const float AirHorizontalSpeedMultiplier = 1.3f;
         private const float FastDropImpulse = -6f;
@@ -88,6 +89,7 @@ namespace stackoverflow_minigame
             LandedThisFrame = false;
             LevelAwardedThisFrame = false;
             BorderHitThisFrame = false;
+            DoomfallActive = false;
             float stepScale = deltaSeconds / Game.FrameTimeSeconds;
 
             float horizontalMax = Math.Max(0, Width - 1);
@@ -167,6 +169,7 @@ namespace stackoverflow_minigame
                     platforms.RemoveAt(i);
                 }
             }
+            ApplyDoomfallBoost(deltaSeconds);
         }
         // Resets the player's position and velocity to the starting state.
         private void ResetPlayer()
@@ -191,6 +194,32 @@ namespace stackoverflow_minigame
         public void SetVisibleRowBudget(int rows)
         {
             visibleRowBudget = Math.Max(1, rows);
+        }
+
+        private void ApplyDoomfallBoost(float deltaSeconds)
+        {
+            if (Player.VelocityY >= 0)
+            {
+                DoomfallActive = false;
+                return;
+            }
+
+            bool hasLowerPlatforms = false;
+            float searchLimit = Player.Y - 0.5f;
+            foreach (Platform platform in platforms)
+            {
+                if (platform.Y <= searchLimit)
+                {
+                    hasLowerPlatforms = true;
+                    break;
+                }
+            }
+
+            DoomfallActive = !hasLowerPlatforms;
+            if (DoomfallActive)
+            {
+                Player.VelocityY += Game.GravityPerSecond * 3.5f * deltaSeconds;
+            }
         }
         private void ReleaseAllPlatforms()
         {
