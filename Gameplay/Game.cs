@@ -256,28 +256,39 @@ namespace stackoverflow_minigame
                 Console.Clear();
                 ConsoleSafe.TrySetCursorPosition(0, 0);
 
+                int centerCol = Console.WindowWidth / 2;
+
                 for (int i = 5; i >= 1; i--)
                 {
                     Console.Clear();
                     int centerRow = Console.WindowHeight / 2;
-                    int centerCol = Console.WindowWidth / 2;
 
-                    ConsoleSafe.TrySetCursorPosition(0, centerRow - 2);
+                    // Display "ADJUST YOUR WINDOW SIZE NOW!" message
+                    ConsoleSafe.TrySetCursorPosition(0, centerRow - 5);
+                    ConsoleSafe.WriteLine($"{new string(' ', Math.Max(0, centerCol - 15))}ADJUST YOUR WINDOW SIZE NOW!".PadRight(Console.WindowWidth));
                     ConsoleSafe.WriteLine("");
-                    ConsoleSafe.WriteLine($"{new string(' ', centerCol - 15)}ADJUST YOUR WINDOW SIZE NOW!".PadRight(Console.WindowWidth));
-                    ConsoleSafe.WriteLine("");
-                    ConsoleSafe.WriteLine($"{new string(' ', centerCol - 10)}GET READY TO CLIMB...".PadRight(Console.WindowWidth));
-                    ConsoleSafe.WriteLine("");
+                    ConsoleSafe.WriteLine($"{new string(' ', Math.Max(0, centerCol - 10))}GET READY TO CLIMB...".PadRight(Console.WindowWidth));
                     ConsoleSafe.WriteLine("");
 
+                    // Get the glyph for the current number
+                    char numberChar = i.ToString()[0];
+                    string[] glyphLines = GlyphLibrary.GetGlyph(numberChar);
+
+                    // Set color based on countdown number
                     Console.ForegroundColor = i <= 3 ? ConsoleColor.Yellow : ConsoleColor.Green;
                     if (i == 1)
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
                     }
 
-                    string countText = i.ToString();
-                    ConsoleSafe.WriteLine($"{new string(' ', centerCol - 1)}{countText}".PadRight(Console.WindowWidth));
+                    // Display each line of the glyph centered
+                    foreach (string glyphLine in glyphLines)
+                    {
+                        int glyphWidth = glyphLine.Length;
+                        int leftPadding = Math.Max(0, centerCol - glyphWidth / 2);
+                        ConsoleSafe.WriteLine($"{new string(' ', leftPadding)}{glyphLine}".PadRight(Console.WindowWidth));
+                    }
+
                     Console.ResetColor();
 
                     if (OperatingSystem.IsWindows())
@@ -289,13 +300,26 @@ namespace stackoverflow_minigame
                     Thread.Sleep(1000);
                 }
 
-                // Final "GO!" message
+                // Final "GO!" message with block letters
                 Console.Clear();
                 int finalRow = Console.WindowHeight / 2;
-                int finalCol = Console.WindowWidth / 2;
-                ConsoleSafe.TrySetCursorPosition(0, finalRow);
+
                 Console.ForegroundColor = ConsoleColor.Green;
-                ConsoleSafe.WriteLine($"{new string(' ', finalCol - 2)}GO!".PadRight(Console.WindowWidth));
+
+                // Render "GO!" using glyphs side by side
+                string[] glyphG = GlyphLibrary.GetGlyph('G');
+                string[] glyphO = GlyphLibrary.GetGlyph('O');
+                string[] glyphExclaim = GlyphLibrary.GetGlyph('!');
+
+                ConsoleSafe.TrySetCursorPosition(0, finalRow - 2);
+                for (int row = 0; row < GlyphLibrary.GlyphHeight; row++)
+                {
+                    // Combine glyphs horizontally with spacing
+                    string combinedLine = $"{glyphG[row]}  {glyphO[row]}  {glyphExclaim[row]}";
+                    int leftPadding = Math.Max(0, centerCol - combinedLine.Length / 2);
+                    ConsoleSafe.WriteLine($"{new string(' ', leftPadding)}{combinedLine}".PadRight(Console.WindowWidth));
+                }
+
                 Console.ResetColor();
 
                 if (OperatingSystem.IsWindows())
