@@ -44,8 +44,8 @@ namespace stackoverflow_minigame
         private int GetGap(World world)
         {
             float progress = GetProgress(world);
-            int minGap = LerpInt(EarlyMinGap, LateMinGap, progress);
-            int maxGap = LerpInt(EarlyMaxGap, LateMaxGap, progress);
+            int minGap = MathHelpers.LerpInt(EarlyMinGap, LateMinGap, progress);
+            int maxGap = MathHelpers.LerpInt(EarlyMaxGap, LateMaxGap, progress);
             if (maxGap < minGap)
             {
                 maxGap = minGap;
@@ -64,7 +64,7 @@ namespace stackoverflow_minigame
         private int GetPlatformsPerBand(World world)
         {
             float progress = GetProgress(world);
-            float chance = LerpFloat(ExtraPlatformEarlyChance, ExtraPlatformLateChance, progress);
+            float chance = MathHelpers.LerpFloat(ExtraPlatformEarlyChance, ExtraPlatformLateChance, progress);
             int count = 1;
             while (count < MaxPlatformsPerBand && rand.NextDouble() < chance)
             {
@@ -127,7 +127,7 @@ namespace stackoverflow_minigame
             int baseMax = Math.Max(minLength, interiorWidth / 3);
 
             float progress = GetProgress(world);
-            float shrinkFactor = LerpFloat(1f, 0.35f, progress);
+            float shrinkFactor = MathHelpers.LerpFloat(1f, 0.35f, progress);
             int maxLength = Math.Max(minLength + 1, (int)MathF.Round(baseMax * shrinkFactor));
 
             return rand.Next(minLength, maxLength + 1);
@@ -164,11 +164,5 @@ namespace stackoverflow_minigame
 
         private static float GetProgress(World world) =>
             Math.Clamp(world.LevelsCompleted / (float)World.GoalPlatforms, 0f, 1f);
-
-        private static int LerpInt(int from, int to, float t) =>
-            (int)MathF.Round(from + (to - from) * t);
-
-        private static float LerpFloat(float from, float to, float t) =>
-            from + (to - from) * t;
     }
 }
