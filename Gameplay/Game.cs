@@ -232,6 +232,9 @@ namespace stackoverflow_minigame
                 state = GameState.Menu;
                 return;
             }
+
+            ShowCountdown();
+
             state = GameState.Running;
             framesClimbed = 0;
             playerWon = false;
@@ -244,6 +247,69 @@ namespace stackoverflow_minigame
             runStopwatch.Reset();
             runStopwatch.Start();
             input.ClearBuffer();
+        }
+
+        private void ShowCountdown()
+        {
+            try
+            {
+                Console.Clear();
+                ConsoleSafe.TrySetCursorPosition(0, 0);
+
+                for (int i = 5; i >= 1; i--)
+                {
+                    Console.Clear();
+                    int centerRow = Console.WindowHeight / 2;
+                    int centerCol = Console.WindowWidth / 2;
+
+                    ConsoleSafe.TrySetCursorPosition(0, centerRow - 2);
+                    ConsoleSafe.WriteLine("");
+                    ConsoleSafe.WriteLine($"{new string(' ', centerCol - 15)}ADJUST YOUR WINDOW SIZE NOW!".PadRight(Console.WindowWidth));
+                    ConsoleSafe.WriteLine("");
+                    ConsoleSafe.WriteLine($"{new string(' ', centerCol - 10)}GET READY TO CLIMB...".PadRight(Console.WindowWidth));
+                    ConsoleSafe.WriteLine("");
+                    ConsoleSafe.WriteLine("");
+
+                    Console.ForegroundColor = i <= 3 ? ConsoleColor.Yellow : ConsoleColor.Green;
+                    if (i == 1)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                    }
+
+                    string countText = i.ToString();
+                    ConsoleSafe.WriteLine($"{new string(' ', centerCol - 1)}{countText}".PadRight(Console.WindowWidth));
+                    Console.ResetColor();
+
+                    if (OperatingSystem.IsWindows())
+                    {
+                        int frequency = 400 + (i * 100);
+                        TryPlayTone(frequency, 200);
+                    }
+
+                    Thread.Sleep(1000);
+                }
+
+                // Final "GO!" message
+                Console.Clear();
+                int finalRow = Console.WindowHeight / 2;
+                int finalCol = Console.WindowWidth / 2;
+                ConsoleSafe.TrySetCursorPosition(0, finalRow);
+                Console.ForegroundColor = ConsoleColor.Green;
+                ConsoleSafe.WriteLine($"{new string(' ', finalCol - 2)}GO!".PadRight(Console.WindowWidth));
+                Console.ResetColor();
+
+                if (OperatingSystem.IsWindows())
+                {
+                    TryPlayTone(1000, 200);
+                }
+
+                Thread.Sleep(500);
+            }
+            catch (Exception ex)
+            {
+                Diagnostics.ReportWarning($"Countdown display failed: {ex.Message}");
+                // Continue anyway - the game should still start
+            }
         }
 
         private void ShowLeaderboard()
