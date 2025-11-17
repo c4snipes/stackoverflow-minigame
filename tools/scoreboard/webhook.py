@@ -398,12 +398,14 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
 
-        # Add CSP for HTML pages - allow inline styles for the retro CRT theme
+        # Add CSP for HTML pages - allow necessary external resources
         self.send_header("Content-Security-Policy",
                         "default-src 'none'; "
-                        "style-src 'self' 'unsafe-inline'; "
-                        "img-src 'self' data:; "
-                        "font-src 'self'")
+                        "script-src 'unsafe-inline'; "
+                        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                        "img-src 'self' data: https://api.qrserver.com; "
+                        "font-src 'self' https://fonts.gstatic.com; "
+                        "connect-src 'self'")
 
         self._add_security_headers()
         self.end_headers()
