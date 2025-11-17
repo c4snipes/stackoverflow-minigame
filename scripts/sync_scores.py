@@ -34,8 +34,8 @@ def main():
         """)
 
         scores = cursor.fetchall()
-        scores = cursor.fetchall()
         conn.close()
+
         success_count = 0
         for score in scores:
             entry: ScoreEntry = {
@@ -54,6 +54,7 @@ def main():
 
             # POST to fly.io
             try:
+                req = urllib.request.Request(
                     REMOTE_URL,
                     data=json.dumps(payload).encode('utf-8'),
                     headers={
