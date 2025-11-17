@@ -6,6 +6,10 @@ using System.Threading;
 
 namespace stackoverflow_minigame
 {
+    /// <summary>
+    /// Background tracing system that persists diagnostic messages to file and stderr.
+    /// Uses a bounded queue with background worker thread for non-blocking operation.
+    /// </summary>
     internal static class Tracing
     {
         private const int MaxQueueSize = 2048;

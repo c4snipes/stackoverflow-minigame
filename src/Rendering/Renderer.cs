@@ -2,45 +2,37 @@ using System;
 
 namespace stackoverflow_minigame
 {
+    /// <summary>
+    /// Double-buffered ASCII renderer with adaptive sizing for constrained terminals.
+    /// </summary>
     internal class Renderer
     {
-        // Number of rows reserved for HUD display at the top of the frame.
         public const int HudRows = 3;
-        // Thickness of the border around the playfield.
         internal const int BorderThickness = 1;
         private const char BorderCornerChar = '+';
-        // Characters used for drawing the borders.
         private const char BorderHorizontalChar = '-';
-        // Characters used for drawing the borders.
         private const char BorderVerticalChar = '|';
-        // Color used for rendering the borders.
         private static readonly ConsoleColor BorderColor = ConsoleColor.Cyan;
-        // Off-screen buffer for the current frame.
-        // This buffer holds the characters to be rendered to the console.
+
+        // Off-screen buffer to avoid flicker during rendering
         private char[] frameBuffer = Array.Empty<char>();
         private char[] paddingBuffer = Array.Empty<char>();
         private int frameWidth;
         private int frameHeight;
-        // Height of the world area being rendered (excluding HUD and borders).
         private int worldRenderHeight;
-        // Indicates whether the frame is ready to be presented.
         private bool frameReady;
-        // Leftmost column of the interior playfield area.
         private int interiorLeft;
-        // Rightmost column of the interior playfield area.
         private int interiorRight;
-        // Top row of the interior playfield area.
         private int interiorTopRow;
-        // Bottom row of the interior playfield area.
         private int interiorBottomRow;
-        // Width of the interior playfield area (excluding borders).
         private int interiorWidth;
-        // Gets the visible width of the current frame.
 
         public int VisibleWidth => frameWidth;
         public int VisibleHeight => frameHeight;
 
-        // Prepares the off-screen buffer for the next frame, deriving console-safe dimensions and drawing the border scaffold.
+        /// <summary>
+        /// Prepares the off-screen buffer for rendering, adapting to current console dimensions.
+        /// </summary>
         public void BeginFrame(World world)
         {
             frameReady = false;
@@ -57,9 +49,7 @@ namespace stackoverflow_minigame
             interiorRight = interiorLeft + Math.Max(0, interiorWidth - 1);
             interiorTopRow = HudRows + BorderThickness;
             interiorBottomRow = interiorTopRow + Math.Max(0, worldRenderHeight - 1);
-            // Allocate or resize the frame buffer as needed.
-            // Clear the buffer to spaces.
-            // This ensures a clean slate for rendering the new frame.
+
             EnsureBufferSize();
             if (frameBuffer.Length > 0)
             {
@@ -81,7 +71,10 @@ namespace stackoverflow_minigame
                 Diagnostics.ReportFailure("Renderer.BeginFrame computed no visible world rows; only HUD will display.");
             }
         }
-        // Renders the world entities into the off-screen buffer.
+
+        /// <summary>
+        /// Renders world entities into the off-screen buffer.
+        /// </summary>
         public void Draw(World world)
         {
             if (!frameReady)
@@ -103,7 +96,9 @@ namespace stackoverflow_minigame
             BlitEntity(world.Player, world);
         }
 
-        // Flushes the prepared buffer to the console, chunking writes to honor current buffer width/height and color boundaries.
+        /// <summary>
+        /// Flushes the off-screen buffer to console, respecting dimensions and color boundaries.
+        /// </summary>
         public void Present()
         {
             if (!frameReady)
@@ -174,7 +169,7 @@ namespace stackoverflow_minigame
 
             frameReady = false;
         }
-        // Updates the world state for the next frame, including player position and platform lifecycle management.
+
         private void EnsureBufferSize()
         {
             int required = frameWidth * frameHeight;
@@ -231,7 +226,7 @@ namespace stackoverflow_minigame
                 frameBuffer[index] = entity.Symbol;
             }
         }
-        // Draws a horizontal span of a platform at the specified row and starting X position.
+
         private void DrawPlatformSpan(int row, int startX, int length, char symbol)
         {
             if (length <= 0)
@@ -258,7 +253,7 @@ namespace stackoverflow_minigame
                 }
             }
         }
-        // Draws the borders around the playfield area.
+
         private void DrawBorders()
         {
             if (frameBuffer.Length == 0 || frameWidth <= 0 || frameHeight <= 0)
@@ -306,7 +301,7 @@ namespace stackoverflow_minigame
             }
             frameBuffer[rowBase + frameWidth - 1] = BorderCornerChar;
         }
-        // Draws the vertical border columns for a specific row.
+
         private void DrawVerticalBorderColumns(int row)
         {
             if (row < 0 || row >= frameHeight)

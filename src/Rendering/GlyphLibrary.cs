@@ -89,18 +89,9 @@ namespace stackoverflow_minigame
 
             int variants = GlyphBitmaps.Count;
             StatusSummary = $"[GlyphLibrary] Glyph cache online ({variants} variants ready).";
-            //  Check for missing required glyphs.
-            //  Report any missing glyphs from the required set.
-            //  Report success if all required glyphs are present.
-            //  This helps ensure that the initials prompt can render all expected characters.
-            //  Missing glyphs will fall back to the space glyph, which may impact visual fidelity.
-            //  This check runs once at startup to inform developers of any issues with glyph definitions.
-            //  It does not affect runtime behavior beyond logging.
-            //  The required glyphs are defined in the GlyphCharacterSet constant.
-            //  The AllowedGlyphs set is used to determine which glyphs should be cached.
-            //  The GlyphBitmaps dictionary contains the actual bitmap definitions for each glyph.
-            //  The GlyphCache is used to store decoded glyphs for quick retrieval.
-            // The FallbackWarnedGlyphs dictionary tracks which glyphs have already triggered a fallback warning.
+
+            // Verify all required glyphs are loaded at startup.
+            // Missing glyphs fall back to space character.
             List<char> missing = new();
             foreach (char required in RequiredGlyphs)
             {

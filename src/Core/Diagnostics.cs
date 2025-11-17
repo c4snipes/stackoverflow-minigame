@@ -3,19 +3,20 @@ using System.Runtime.CompilerServices;
 
 namespace stackoverflow_minigame
 {
+    /// <summary>
+    /// Centralized diagnostics system with event-based routing.
+    /// Falls back to Tracing when no subscribers are active.
+    /// </summary>
     internal static class Diagnostics
     {
-        // Events for reporting diagnostics messages.
-        // Subscribers can listen to these events to handle diagnostics output.
-        // If no subscribers are present, messages are enqueued to the Tracing system.
-        // Each event provides a string message with context about the diagnostic.
-        // FailureReported is invoked for critical errors that may affect game functionality.
-        // WarningReported is invoked for non-critical issues that may impact user experience.
-        // InfoReported is invoked for informational messages about game state or actions.
+        // Events fire to active subscribers; unsubscribed messages route to Tracing for persistence
         public static event Action<string>? FailureReported;
         public static event Action<string>? WarningReported;
         public static event Action<string>? InfoReported;
 
+        /// <summary>
+        /// Reports a critical failure that may affect game functionality.
+        /// </summary>
         public static void ReportFailure(string message, Exception? ex = null, [CallerMemberName] string? caller = null)
         {
             string prefix = BuildPrefix(message, caller);
@@ -32,6 +33,10 @@ namespace stackoverflow_minigame
                 Tracing.Enqueue(prefix);
             }
         }
+
+        /// <summary>
+        /// Reports a non-critical warning that may impact user experience.
+        /// </summary>
         public static void ReportWarning(string message, [CallerMemberName] string? caller = null)
         {
             string prefix = BuildPrefix(message, caller);
@@ -45,6 +50,9 @@ namespace stackoverflow_minigame
             }
         }
 
+        /// <summary>
+        /// Reports informational messages about game state or actions.
+        /// </summary>
         public static void ReportInfo(string message, [CallerMemberName] string? caller = null)
         {
             string prefix = BuildPrefix(message, caller);

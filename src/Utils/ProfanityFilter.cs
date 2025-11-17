@@ -5,10 +5,12 @@ using System.Linq;
 namespace stackoverflow_minigame
 {
     /// <summary>
-    /// Centralized profanity filtering so initials (and other short strings) remain arcade friendly.
+    /// Profanity filter for player initials and short strings.
+    /// Keeps the arcade experience family-friendly.
     /// </summary>
     internal static class ProfanityFilter
     {
+        // Forbidden word list for arcade-style filtering
         private static readonly HashSet<string> Forbidden =
             new(StringComparer.OrdinalIgnoreCase)
             {
@@ -23,6 +25,9 @@ namespace stackoverflow_minigame
 
         private const string SanitizedInitials = "PG!";
 
+        /// <summary>
+        /// Filters initials for profanity, returning sanitized version if needed.
+        /// </summary>
         public static string FilterInitials(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))

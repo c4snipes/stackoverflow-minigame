@@ -59,6 +59,10 @@ namespace stackoverflow_minigame
             LogCapabilities();
         }
 
+        /// <summary>
+        /// Singleton instance providing terminal capability detection.
+        /// Thread-safe lazy initialization.
+        /// </summary>
         public static TerminalCapabilities Instance
         {
             get

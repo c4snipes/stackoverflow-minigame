@@ -12,7 +12,7 @@ LOCAL_DB = "scoreboard.db"
 SECRET = os.environ.get("STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET", "")
 
 class ScoreEntry(TypedDict):
-    id: int
+    id: str  # Database uses TEXT PRIMARY KEY
     initials: str
     level: int
     runTimeTicks: int
@@ -39,7 +39,7 @@ def main():
         success_count = 0
         for score in scores:
             entry: ScoreEntry = {
-                "id": int(score["id"]),
+                "id": score["id"],
                 "initials": str(score["initials"]),
                 "level": int(score["level"]),
                 "runTimeTicks": int(score["run_time_ticks"]),

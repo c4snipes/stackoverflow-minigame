@@ -97,7 +97,7 @@ namespace stackoverflow_minigame
             float clampedX = Math.Clamp(newX, 0f, horizontalMax);
             BorderHitThisFrame = MathF.Abs(clampedX - newX) > float.Epsilon;
             Player.X = clampedX;
-            // Apply fast drop impulse if requested.
+
             if (fastDropRequested)
             {
                 Player.VelocityY += FastDropImpulse;

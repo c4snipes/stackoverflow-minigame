@@ -115,7 +115,7 @@ class ScoreRepository:
                     "id": entry["id"],
                     "initials": entry["initials"],
                     "level": entry["level"],
-                    "max_altitude": 0.0,  # No longer used, set to 0
+                    "max_altitude": 0.0,  # DEPRECATED: Legacy field kept for backward compatibility with old clients
                     "run_time_ticks": entry["runTimeTicks"],
                     "victory": int(entry["victory"]),
                     "timestamp_utc": entry["timestampUtc"],

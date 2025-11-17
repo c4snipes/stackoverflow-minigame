@@ -19,6 +19,9 @@ namespace stackoverflow_minigame
         private Thread? listener;
         private const int LISTENER_SHUTDOWN_TIMEOUT_MS = 1000;
 
+        /// <summary>
+        /// Indicates whether interactive console input is available in this environment.
+        /// </summary>
         public bool SupportsInteractiveInput { get; }
 
         public Input()
@@ -26,6 +29,9 @@ namespace stackoverflow_minigame
             SupportsInteractiveInput = ProbeForConsoleInput();
         }
 
+        /// <summary>
+        /// Starts the background input listener thread.
+        /// </summary>
         public void Start()
         {
             if (!SupportsInteractiveInput)

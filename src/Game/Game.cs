@@ -10,10 +10,15 @@ namespace stackoverflow_minigame
 {
     internal enum GameState { Menu, Running, Over }
 
+    /// <summary>
+    /// Main game controller managing state, input, rendering, and gameplay loop.
+    /// Coordinates between World, Renderer, Input, Spawner, and Scoreboard systems.
+    /// </summary>
     internal class Game
     {
         static Game()
         {
+            // Route diagnostics to stderr by default to keep stdout clean for gameplay
             Diagnostics.FailureReported += DefaultFailureLogger;
         }
 
@@ -145,7 +150,7 @@ namespace stackoverflow_minigame
                 }
             }
         }
-        // Menu loop: display menu, handle input to start game or view leaderboard.
+
         private void MenuLoop()
         {
             bool redrawMenu = true;
@@ -194,8 +199,7 @@ namespace stackoverflow_minigame
                 return;
             }
         }
-        // Renders the menu header and instructions.
-        // Called when entering the menu state or after viewing the leaderboard.
+
         private void RenderMenuHeader()
         {
             try
@@ -411,8 +415,6 @@ namespace stackoverflow_minigame
             return true;
         }
 
-        // Core gameplay loop: process input, advance world state, render, and keep a stable frame cadence.
-        // Central tick loop: pulls input, advances simulation, renders, and enforces the frame cadence.
         private void GameLoop()
         {
             Stopwatch deltaTimer = Stopwatch.StartNew();
@@ -472,7 +474,7 @@ namespace stackoverflow_minigame
                 }
             }
         }
-        // Game over loop: display results, handle input to restart or quit.
+
         private void OverLoop()
         {
             Console.Clear();
@@ -508,7 +510,7 @@ namespace stackoverflow_minigame
                 Thread.Sleep(10);
             }
         }
-        // Processes gameplay input for movement, fast drop, HUD toggling, and quitting.
+
         private void ProcessGameplayInput(float deltaSeconds)
         {
             bool horizontalInputDetected = false;
@@ -561,13 +563,13 @@ namespace stackoverflow_minigame
                 }
             }
         }
-        // Updates the horizontal movement intent based on input direction.
+
         private void UpdateHorizontalIntent(int direction)
         {
             horizontalDirection = Math.Clamp(direction, -1, 1);
             horizontalIntentTimer = HorizontalIntentMemorySeconds;
         }
-        // Cycles the HUD display mode between Full, Compact, and Hidden.
+
         private void CycleHudMode()
         {
             hudMode = hudMode switch
@@ -577,7 +579,7 @@ namespace stackoverflow_minigame
                 _ => HudMode.Full
             };
         }
-        // Triggers the game over state and records the run outcome.
+
         private void TriggerGameOver(bool won)
         {
             if (state == GameState.Over)
@@ -613,7 +615,7 @@ namespace stackoverflow_minigame
                 Console.WriteLine($"  {i + 1}. {formatter(entries[i])}");
             }
         }
-        // Ensures the player remains within horizontal bounds of the world.
+
         private void ClampPlayerWithinBounds()
         {
             world.Player.X = Math.Clamp(world.Player.X, 0f, Math.Max(0, world.Width - 1));
@@ -670,8 +672,7 @@ namespace stackoverflow_minigame
             string timeText = TimeFormatting.FormatDuration(runStopwatch.Elapsed);
             float distanceFromBottom = world.Player.Y - world.Offset;
             ConsoleColor statsColor = distanceFromBottom < DangerZoneThreshold ? ConsoleColor.Red : ConsoleColor.Gray;
-            // Renders the HUD lines with player stats, progress bar, and controls based on the current HUD mode.
-            // The HUD is drawn at the calculated starting row and respects console width constraints.
+
             WriteHudLine(hudStartRow + 0, $"Player: {playerInitials} | Level: {world.LevelsCompleted,4} | Score: {framesClimbed,4} | Height: {currentHeight,4} | Max: {maxHeight,4} | Best: {displayedBest,4} | Time: {timeText,8}", hudWidth, statsColor);
 
             if (showProgress)
@@ -695,7 +696,7 @@ namespace stackoverflow_minigame
                 WriteHudLine(hudStartRow + 2, "Controls: A/D or <-/-> move, S/↓ dives, Space jumps, Q/Esc quits", hudWidth, ConsoleColor.Cyan);
             }
         }
-        // Rounds the altitude to the nearest integer for display purposes.
+
         private static int GetRoundedAltitude(float altitude) => (int)MathF.Round(altitude);
 
         private static void WriteHudLine(int row, string text, int widthHint, ConsoleColor? color = null)

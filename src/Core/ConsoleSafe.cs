@@ -5,20 +5,21 @@ using System.Threading;
 
 namespace stackoverflow_minigame
 {
-    // Provides defensive wrappers around console APIs so rendering can degrade gracefully in constrained environments.
+    /// <summary>
+    /// Provides defensive wrappers around console APIs so rendering can degrade gracefully in constrained environments.
+    /// </summary>
     internal static class ConsoleSafe
     {
-        // Ticks of the last time a warning was issued for buffer dimension access.
-        // Used to throttle warnings to avoid spamming.
-        // Initialized to DateTime.MinValue.Ticks to ensure the first warning is always allowed.
+        // Throttle diagnostic warnings to prevent spam when console access repeatedly fails
         private static long lastWidthWarningTicks = DateTime.MinValue.Ticks;
         private static long lastHeightWarningTicks = DateTime.MinValue.Ticks;
         private const double WarningCooldownSeconds = 4;
         private static readonly long WarningCooldownTicks = TimeSpan.FromSeconds(WarningCooldownSeconds).Ticks;
-        // Gets the console buffer width, returning a fallback value if unavailable.
-        // If the buffer width cannot be read, a warning is reported (throttled to avoid
-        // spamming).
 
+        /// <summary>
+        /// Gets the console buffer width, returning a fallback value if unavailable.
+        /// Warnings are throttled to avoid spamming when console access fails repeatedly.
+        /// </summary>
         public static int GetBufferWidth(int fallback)
         {
             try
@@ -38,8 +39,11 @@ namespace stackoverflow_minigame
                 return fallback;
             }
         }
-        // Gets the console buffer height, returning a fallback value if unavailable.
-        // If the buffer height cannot be read, a warning is reported (throttled to avoid spamming).
+
+        /// <summary>
+        /// Gets the console buffer height, returning a fallback value if unavailable.
+        /// Warnings are throttled to avoid spamming when console access fails repeatedly.
+        /// </summary>
         public static int GetBufferHeight(int fallback)
         {
             try
@@ -104,9 +108,8 @@ namespace stackoverflow_minigame
             {
                 return false;
             }
-            // Attempt to set the cursor position.  Catch and report any exceptions.
-            // If successful, return true; otherwise, return false.
-            // This method ensures that console rendering does not crash the application in constrained environments.
+
+            // Gracefully degrade: never crash the app due to cursor positioning failures in constrained terminals
             try
             {
                 Console.SetCursorPosition(left, top);

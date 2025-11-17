@@ -9,7 +9,9 @@ using System.Threading;
 
 namespace stackoverflow_minigame
 {
-    // Displays the leaderboard for the Stackoverflow Skyscraper game.
+    /// <summary>
+    /// Live leaderboard viewer with remote feed support and time filtering.
+    /// </summary>
     internal class LeaderboardViewer
     {
         private readonly Scoreboard scoreboard;
@@ -40,18 +42,17 @@ namespace stackoverflow_minigame
         public void Run(bool embedded = false)
         {
             bool singlePass = embedded ? false : Console.IsOutputRedirected;
-            bool cursorHidden = false;
+            bool originalCursorVisible = false;
             bool shouldRestoreCursor = !singlePass;
-            if (shouldRestoreCursor)
+            bool shouldManageCursor = shouldRestoreCursor && OperatingSystem.IsWindows();
+            if (shouldManageCursor)
             {
                 try
                 {
-#if WINDOWS
-                                        cursorHidden = Console.CursorVisible;
-                                        Console.CursorVisible = false;
-#else
-                    cursorHidden = false;
-#endif
+#pragma warning disable CA1416 // Validate platform compatibility - already guarded by shouldManageCursor
+                    originalCursorVisible = Console.CursorVisible;
+                    Console.CursorVisible = false;
+#pragma warning restore CA1416
                 }
                 catch
                 {
@@ -60,8 +61,9 @@ namespace stackoverflow_minigame
             }
 
             layoutInitialized = false;
-            // Console.Title is only supported on Windows
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+
+            // Console.Title only supported on Windows
+            if (OperatingSystem.IsWindows())
             {
                 try
                 {
@@ -86,26 +88,20 @@ namespace stackoverflow_minigame
             }
             finally
             {
-#if WINDOWS
-                Console.CursorVisible = cursorHidden;
-#endif
+                if (shouldManageCursor)
+                {
+                    try
+                    {
+                        Console.CursorVisible = originalCursorVisible;
+                    }
+                    catch
+                    {
+                        // ignore cursor restore failures
+                    }
+                }
                 ConsoleSafe.WriteLine(string.Empty);
-                try
-                {
-                    Console.CursorVisible = cursorHidden;
-                    ConsoleSafe.WriteLine(string.Empty);
-                }
-                catch
-                {
-                    // ignore cursor restore failures
-                }
             }
         }
-
-
-        // Waits for the refresh interval or a quit key press.
-        // Returns true if a quit key was pressed.
-        // <returns>True if a quit key was pressed; otherwise, false.</returns>
 
         private bool WaitOrQuit()
         {
@@ -127,9 +123,6 @@ namespace stackoverflow_minigame
             }
             return false;
         }
-        // Tries to read a quit key from the console input.
-        // <param name="quit">Outputs true if a quit key was pressed.</param>
-        // <returns>True if a key was read; otherwise, false.</returns>
 
         private bool TryReadQuitKey(out bool quit)
         {
@@ -179,9 +172,6 @@ namespace stackoverflow_minigame
             }
             return true;
         }
-        // Draws the leaderboard to the console.
-        // <returns>True if drawing succeeded; otherwise, false.</returns>
-
 
         private bool Draw()
         {
@@ -254,19 +244,7 @@ namespace stackoverflow_minigame
             WriteSection(true, topSectionRow, "Top Scores", topScores, consoleWidth, null);
             return true;
         }
-        // Writes a section of the leaderboard at a specified console position.
-        /// <summary>
-        /// Writes a section of the leaderboard at a specified console position.
-        /// </summary>
-        /// <param name="usePositioning">Whether to use console positioning.</param>
-        /// <param name="startRow">The starting row for the section.</param>
-        /// <param name="title">The title of the section.</param>
-        /// <param name="scores">The scores to display.</param>
-        /// <param name="consoleWidth">The width of the console.</param>
-        /// <param name="errorMessage">An optional error message to display.</param>
-        /// <returns>Nothing.</returns>
-        /// <remarks>If positioning is disabled, this method does nothing.</remarks>
-        ///
+
         private void WriteSection(bool usePositioning, int startRow, string title, IReadOnlyList<ScoreEntry> scores, int consoleWidth, string? errorMessage)
         {
             if (!usePositioning)
@@ -290,7 +268,7 @@ namespace stackoverflow_minigame
             }
             WriteLineAt(row, string.Empty, consoleWidth);
         }
-        // Pads the remaining rows in a section with empty entries.
+
         private int PadRemainingRows(int row, int consoleWidth)
         {
             for (int i = 0; i < EntriesToDisplay; i++)

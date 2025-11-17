@@ -2,6 +2,10 @@ using System;
 
 namespace stackoverflow_minigame
 {
+    /// <summary>
+    /// Procedural platform spawner with progressive difficulty scaling.
+    /// Gradually increases gaps and reduces platform density as player progresses.
+    /// </summary>
     internal class Spawner
     {
         private readonly Random rand;

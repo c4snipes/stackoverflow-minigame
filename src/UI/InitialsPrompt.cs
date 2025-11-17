@@ -332,4 +332,3 @@ namespace stackoverflow_minigame
         }
     }
 }
-/// Renders the initials line with the current input and blinking cursor state.

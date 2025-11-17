@@ -758,19 +758,23 @@
       }
 
       async function refreshLeaderboard(since = null) {
-        showLoading();
-
-        // Abort any pending requests
+        // Cancel and replace any pending request instead of blocking
+        // This prevents race conditions while allowing the latest request to proceed
         if (window.pendingRequest) {
           window.pendingRequest.abort();
         }
+
+        showLoading();
 
         const controller = new AbortController();
         window.pendingRequest = controller;
 
         try {
           const url = since ? `/scoreboard?since=${since}` : '/scoreboard';
-          const response = await fetch(url, { signal: controller.signal });
+          const response = await fetch(url, {
+            signal: controller.signal,
+            cache: 'no-store'  // Prevent browser caching to reduce memory usage
+          });
           if (!response.ok) throw new Error('Failed to fetch');
 
           const data = await response.json();

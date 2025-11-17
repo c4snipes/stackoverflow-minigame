@@ -13,6 +13,9 @@ using Microsoft.Data.Sqlite;
 
 namespace stackoverflow_minigame
 {
+    /// <summary>
+    /// Represents a single scoreboard entry with player performance data.
+    /// </summary>
     internal class ScoreEntry
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -28,6 +31,9 @@ namespace stackoverflow_minigame
         public ScoreEntry Clone() => (ScoreEntry)MemberwiseClone();
     }
 
+    /// <summary>
+    /// Global statistics aggregated from all scoreboard entries.
+    /// </summary>
     internal class GlobalStats
     {
         public int TotalPlayers { get; set; }
@@ -42,6 +48,10 @@ namespace stackoverflow_minigame
         public TimeSpan FastestTime => TimeSpan.FromTicks(FastestTimeTicks);
     }
 
+    /// <summary>
+    /// Local scoreboard with SQLite persistence and optional remote webhook/GitHub dispatch integration.
+    /// Automatically syncs new scores to configured remote endpoints.
+    /// </summary>
     internal class Scoreboard
     {
         public const string DefaultFileName = "scoreboard.db";
