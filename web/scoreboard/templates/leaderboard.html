@@ -849,16 +849,15 @@
         // Create document fragment for efficient DOM updates
         const fragment = document.createDocumentFragment();
 
-        // Create rows directly to avoid innerHTML table parsing issues
-        data.forEach((entry, index) => {
-          const tempTable = document.createElement('table');
-          const tempTbody = document.createElement('tbody');
-          tempTbody.innerHTML = rowTemplate(entry, index + 1);
-          // Extract the tr element from the tbody
-          if (tempTbody.firstChild) {
-            fragment.appendChild(tempTbody.firstChild);
-          }
-        });
+        // Use DOMParser to properly parse table HTML
+        const parser = new DOMParser();
+        const htmlString = '<table><tbody>' +
+          data.map((entry, index) => rowTemplate(entry, index + 1)).join('') +
+          '</tbody></table>';
+        const doc = parser.parseFromString(htmlString, 'text/html');
+        const rows = doc.querySelectorAll('tbody tr');
+
+        rows.forEach(row => fragment.appendChild(row.cloneNode(true)));
 
         tbody.appendChild(fragment);
 
