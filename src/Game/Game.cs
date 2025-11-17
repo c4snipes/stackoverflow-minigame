@@ -693,7 +693,7 @@ namespace stackoverflow_minigame
 
             if (showControls)
             {
-                WriteHudLine(hudStartRow + 2, "Controls: A/D or <-/-> move, S/↓ dives, Space jumps, Q/Esc quits", hudWidth, ConsoleColor.Cyan);
+                WriteHudLine(hudStartRow + 2, "Controls: A/D or <-/-> move, S/↓ dives, Q/Esc quits", hudWidth, ConsoleColor.Cyan);
             }
         }
 
