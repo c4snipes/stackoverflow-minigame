@@ -948,6 +948,10 @@
 
         localStorage.setItem('lastLeaderboardUpdate', Date.now().toString());
         setInterval(updateTimestamp, 1000);
+
+        // Initial refresh to populate stats on page load
+        refreshLeaderboard();
+
         autoRefreshInterval = setInterval(refreshLeaderboard, AUTO_REFRESH_SECONDS * 1000);
         document.addEventListener('visibilitychange', handleVisibilityChange);
       });

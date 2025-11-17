@@ -415,8 +415,6 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
     def _render_table(
         entries: Iterable[EntryMapping], show_levels: bool, tbody_id: str = ""
     ) -> str:
-        if not entries:
-            return "<p>No runs recorded yet.</p>"
         header_main = "<th>Levels</th>" if show_levels else "<th>Run Time</th>"
         header_aux = "<th>Run Time</th>" if show_levels else "<th>Levels</th>"
         tbody_tag = f'<tbody id="{tbody_id}">' if tbody_id else "<tbody>"
@@ -428,18 +426,24 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
             "</tr></thead>",
             tbody_tag
         ]
-        for idx, entry in enumerate(entries, start=1):
-            initials_raw = str(entry.get("initials", "???"))
-            initials = html.escape(initials_raw)
-            levels = int(str(entry.get("level", 0)))
-            run_time_ticks = entry.get("runTimeTicks", 0)
-            run_time = ScoreboardHandler._format_duration(run_time_ticks)
-            if show_levels:
-                rows.append(
-                    f"<tr><td>{idx}</td><td>{initials}</td><td>{levels}</td><td>{run_time}</td></tr>")
-            else:
-                rows.append(
-                    f"<tr><td>{idx}</td><td>{initials}</td><td>{run_time}</td><td>{levels}</td></tr>")
+
+        if not entries:
+            # Render empty tbody with message but keep table structure intact
+            rows.append('<tr><td colspan="4" class="empty-message">No runs recorded yet.</td></tr>')
+        else:
+            for idx, entry in enumerate(entries, start=1):
+                initials_raw = str(entry.get("initials", "???"))
+                initials = html.escape(initials_raw)
+                levels = int(str(entry.get("level", 0)))
+                run_time_ticks = entry.get("runTimeTicks", 0)
+                run_time = ScoreboardHandler._format_duration(run_time_ticks)
+                if show_levels:
+                    rows.append(
+                        f"<tr><td>{idx}</td><td>{initials}</td><td>{levels}</td><td>{run_time}</td></tr>")
+                else:
+                    rows.append(
+                        f"<tr><td>{idx}</td><td>{initials}</td><td>{run_time}</td><td>{levels}</td></tr>")
+
         rows.append("</tbody></table>")
         return "".join(rows)
 
