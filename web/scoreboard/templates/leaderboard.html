@@ -846,8 +846,26 @@
 
       function updateTable(tableId, data, rowTemplate) {
         const tbody = document.getElementById(tableId);
-        if (!tbody || !data || data.length === 0) return;
-        tbody.innerHTML = data.map((entry, index) => rowTemplate(entry, index + 1)).join('');
+        if (!tbody) return;
+
+        // Clear existing content and remove all event listeners
+        while (tbody.firstChild) {
+          tbody.removeChild(tbody.firstChild);
+        }
+
+        if (!data || data.length === 0) return;
+
+        // Create document fragment for efficient DOM updates
+        const fragment = document.createDocumentFragment();
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = data.map((entry, index) => rowTemplate(entry, index + 1)).join('');
+
+        // Move nodes from temp div to fragment
+        while (tempDiv.firstChild) {
+          fragment.appendChild(tempDiv.firstChild);
+        }
+
+        tbody.appendChild(fragment);
       }
 
       function filterTables() {
@@ -913,6 +931,15 @@
       }
 
       document.addEventListener('DOMContentLoaded', () => {
+        // Clean up old localStorage entries (keep only last update time)
+        const keysToKeep = ['lastLeaderboardUpdate'];
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const key = localStorage.key(i);
+          if (key && !keysToKeep.includes(key) && key.startsWith('leaderboard')) {
+            localStorage.removeItem(key);
+          }
+        }
+
         localStorage.setItem('lastLeaderboardUpdate', Date.now().toString());
         setInterval(updateTimestamp, 1000);
         autoRefreshInterval = setInterval(refreshLeaderboard, AUTO_REFRESH_SECONDS * 1000);
@@ -923,6 +950,9 @@
         if (autoRefreshInterval) {
           clearInterval(autoRefreshInterval);
         }
+
+        // Clean up to prevent memory leaks
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
       });
     </script>
   </body>
