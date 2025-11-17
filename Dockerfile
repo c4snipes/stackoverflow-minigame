@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir Flask flask-cors
 RUN mkdir -p /data && chmod 777 /data
 
 # Copy application code
-COPY tools tools
+COPY web web
 
 # Expose port 8080
 EXPOSE 8080
@@ -29,4 +29,4 @@ ENV SCOREBOARD_HOST=0.0.0.0
 ENV SCOREBOARD_PORT=8080
 ENV SCOREBOARD_DB_PATH=/data/scoreboard.db
 
-CMD ["python", "-m", "tools.scoreboard.webhook"]
+CMD ["python", "-m", "web.scoreboard.webhook"]

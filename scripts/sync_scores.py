@@ -6,10 +6,18 @@ import sqlite3
 import sys
 import urllib.request
 import urllib.error
-
+from typing import TypedDict
 REMOTE_URL = "https://stackoverflow-minigame.fly.dev/scoreboard"
 LOCAL_DB = "scoreboard.db"
 SECRET = os.environ.get("STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET", "")
+
+class ScoreEntry(TypedDict):
+    id: int
+    initials: str
+    level: int
+    runTimeTicks: int
+    victory: bool
+    timestampUtc: str
 
 def main():
     # Connect to local database
@@ -26,24 +34,17 @@ def main():
         """)
 
         scores = cursor.fetchall()
+        scores = cursor.fetchall()
         conn.close()
-
-        if not scores:
-            print("No scores found in local database")
-            return
-
-        print(f"Found {len(scores)} scores to sync...")
-
-        # Upload each score to fly.io
         success_count = 0
         for score in scores:
-            entry = {
-                "id": score["id"],
-                "initials": score["initials"],
-                "level": score["level"],
-                "runTimeTicks": score["run_time_ticks"],
+            entry: ScoreEntry = {
+                "id": int(score["id"]),
+                "initials": str(score["initials"]),
+                "level": int(score["level"]),
+                "runTimeTicks": int(score["run_time_ticks"]),
                 "victory": bool(score["victory"]),
-                "timestampUtc": score["timestamp_utc"]
+                "timestampUtc": str(score["timestamp_utc"])
             }
 
             # Create payload
@@ -53,7 +54,6 @@ def main():
 
             # POST to fly.io
             try:
-                req = urllib.request.Request(
                     REMOTE_URL,
                     data=json.dumps(payload).encode('utf-8'),
                     headers={

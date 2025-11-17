@@ -109,3 +109,5 @@ SECURITY_SCAN_RESULTS.md
 bandit-report.txt
 safety-report.json
 mypy-report.txt
+
+CODEBASE_RESTRUCTURE_PLAN.md

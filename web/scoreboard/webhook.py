@@ -152,7 +152,7 @@ except Exception as exc:  # noqa: BLE001
     LOGGER.error("Unable to initialize the scoreboard repository: %s", exc)
     raise SystemExit(1) from exc
 LEADERBOARD_LIMIT_DEFAULT = resolve_leaderboard_limit()
-TEMPLATE_PATH = Path(__file__).with_name("leaderboard.html")
+TEMPLATE_PATH = Path(__file__).parent / "templates" / "leaderboard.html"
 try:
     HTML_TEMPLATE = TEMPLATE_PATH.read_text(encoding="utf-8")
 except FileNotFoundError as exc:

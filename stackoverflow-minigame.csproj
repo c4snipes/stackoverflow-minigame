@@ -12,12 +12,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Core/*.cs" />
-    <Compile Include="Gameplay/*.cs" />
-    <Compile Include="Rendering/*.cs" />
-    <Compile Include="Scoreboard/*.cs" />
-    <Compile Include="UI/*.cs" />
-    <Compile Include="Utils/*.cs" />
+    <Compile Include="src/Core/*.cs" />
+    <Compile Include="src/Game/*.cs" />
+    <Compile Include="src/Rendering/*.cs" />
+    <Compile Include="src/Scoreboard/*.cs" />
+    <Compile Include="src/UI/*.cs" />
+    <Compile Include="src/Utils/*.cs" />
   </ItemGroup>
 
   <ItemGroup>
