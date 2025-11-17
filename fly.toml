@@ -6,6 +6,7 @@ primary_region = "iad"
 
 [env]
   PORT = "8080"
+  SCOREBOARD_DB_PATH = "/data/scoreboard.db"
 
 # Auto-stop/start to save costs when idle
 [http_service]

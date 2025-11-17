@@ -119,7 +119,7 @@ namespace stackoverflow_minigame
 
             var command = connection.CreateCommand();
             command.CommandText = @"
-                CREATE TABLE IF NOT EXISTS scores (
+                CREATE TABLE IF NOT EXISTS scoreboard (
                     id TEXT PRIMARY KEY,
                     initials TEXT NOT NULL,
                     level INTEGER NOT NULL,
@@ -128,9 +128,9 @@ namespace stackoverflow_minigame
                     victory INTEGER NOT NULL,
                     timestamp_utc TEXT NOT NULL
                 );
-                CREATE INDEX IF NOT EXISTS idx_level ON scores(level DESC, run_time_ticks ASC);
-                CREATE INDEX IF NOT EXISTS idx_run_time ON scores(run_time_ticks ASC);
-                CREATE INDEX IF NOT EXISTS idx_timestamp ON scores(timestamp_utc);
+                CREATE INDEX IF NOT EXISTS idx_level ON scoreboard(level DESC, run_time_ticks ASC);
+                CREATE INDEX IF NOT EXISTS idx_run_time ON scoreboard(run_time_ticks ASC);
+                CREATE INDEX IF NOT EXISTS idx_timestamp ON scoreboard(timestamp_utc);
             ";
             command.ExecuteNonQuery();
         }
@@ -184,7 +184,7 @@ namespace stackoverflow_minigame
 
                 using var command = connection.CreateCommand();
                 command.CommandText = @"
-                    INSERT OR REPLACE INTO scores (id, initials, level, max_altitude, run_time_ticks, victory, timestamp_utc)
+                    INSERT OR REPLACE INTO scoreboard (id, initials, level, max_altitude, run_time_ticks, victory, timestamp_utc)
                     VALUES ($id, $initials, $level, $maxAltitude, $runTimeTicks, $victory, $timestampUtc)
                 ";
                 command.Parameters.AddWithValue("$id", entry.Id);
@@ -235,7 +235,7 @@ namespace stackoverflow_minigame
                     {
                         command.CommandText = @"
                             SELECT id, initials, level, max_altitude, run_time_ticks, victory, timestamp_utc
-                            FROM scores
+                            FROM scoreboard
                             WHERE timestamp_utc >= $since
                             ORDER BY level DESC, run_time_ticks ASC
                             LIMIT $count
@@ -246,7 +246,7 @@ namespace stackoverflow_minigame
                     {
                         command.CommandText = @"
                             SELECT id, initials, level, max_altitude, run_time_ticks, victory, timestamp_utc
-                            FROM scores
+                            FROM scoreboard
                             ORDER BY level DESC, run_time_ticks ASC
                             LIMIT $count
                         ";
@@ -277,7 +277,7 @@ namespace stackoverflow_minigame
                     {
                         command.CommandText = @"
                             SELECT id, initials, level, max_altitude, run_time_ticks, victory, timestamp_utc
-                            FROM scores
+                            FROM scoreboard
                             WHERE run_time_ticks > 0 AND level > 0 AND timestamp_utc >= $since
                             ORDER BY run_time_ticks ASC, level DESC
                             LIMIT $count
@@ -288,7 +288,7 @@ namespace stackoverflow_minigame
                     {
                         command.CommandText = @"
                             SELECT id, initials, level, max_altitude, run_time_ticks, victory, timestamp_utc
-                            FROM scores
+                            FROM scoreboard
                             WHERE run_time_ticks > 0 AND level > 0
                             ORDER BY run_time_ticks ASC, level DESC
                             LIMIT $count
@@ -325,7 +325,7 @@ namespace stackoverflow_minigame
                                 CAST(AVG(level) AS INTEGER) as average_level,
                                 MAX(level) as highest_level,
                                 MIN(CASE WHEN run_time_ticks > 0 THEN run_time_ticks END) as fastest_time
-                            FROM scores
+                            FROM scoreboard
                             WHERE timestamp_utc >= $since
                         ";
                         command.Parameters.AddWithValue("$since", since.Value.ToString("O"));
@@ -339,7 +339,7 @@ namespace stackoverflow_minigame
                                 CAST(AVG(level) AS INTEGER) as average_level,
                                 MAX(level) as highest_level,
                                 MIN(CASE WHEN run_time_ticks > 0 THEN run_time_ticks END) as fastest_time
-                            FROM scores
+                            FROM scoreboard
                         ";
                     }
 
@@ -361,7 +361,7 @@ namespace stackoverflow_minigame
                         {
                             topCommand.CommandText = @"
                                 SELECT initials
-                                FROM scores
+                                FROM scoreboard
                                 WHERE timestamp_utc >= $since
                                 GROUP BY initials
                                 ORDER BY MAX(level) DESC
@@ -373,7 +373,7 @@ namespace stackoverflow_minigame
                         {
                             topCommand.CommandText = @"
                                 SELECT initials
-                                FROM scores
+                                FROM scoreboard
                                 GROUP BY initials
                                 ORDER BY MAX(level) DESC
                                 LIMIT 1
@@ -388,7 +388,7 @@ namespace stackoverflow_minigame
                         {
                             fastestCommand.CommandText = @"
                                 SELECT initials
-                                FROM scores
+                                FROM scoreboard
                                 WHERE run_time_ticks > 0 AND timestamp_utc >= $since
                                 ORDER BY run_time_ticks ASC
                                 LIMIT 1
@@ -399,7 +399,7 @@ namespace stackoverflow_minigame
                         {
                             fastestCommand.CommandText = @"
                                 SELECT initials
-                                FROM scores
+                                FROM scoreboard
                                 WHERE run_time_ticks > 0
                                 ORDER BY run_time_ticks ASC
                                 LIMIT 1

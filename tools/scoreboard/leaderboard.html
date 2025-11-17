@@ -759,6 +759,14 @@
       }
 
       @media (max-width: 768px) {
+        /* .search-container {
+          flex-direction: column;
+        }
+
+        .search-input {
+          width: 100%;
+        } */
+
         .search-container {
           flex-direction: column;
         }
@@ -783,10 +791,10 @@
               <span class="prompt">root@flyio:~$</span> cat /data/scoreboard.db
             </div>
             <h1 class="title-art">
-              ╔════════════════════════════════════════╗<br>
-              ║  STACKOVERFLOW SKYSCRAPER              ║<br>
-              ║  === LEADERBOARD TERMINAL ===          ║<br>
-              ╚════════════════════════════════════════╝
+              ╔═══════════════════════════════════════════╗<br>
+              ║&nbsp;&nbsp;STACKOVERFLOW SKYSCRAPER&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;║<br>
+              ║&nbsp;&nbsp;=== LEADERBOARD TERMINAL ===&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;║<br>
+              ╚═══════════════════════════════════════════╝
             </h1>
             <p class="subtitle">
               REMOTE FEED: FLY.IO → POST TO /scoreboard <span class="blink">▮</span>
@@ -1018,11 +1026,9 @@
         tbody.innerHTML = data.map((entry, index) => rowTemplate(entry, index + 1)).join('');
       }
 
-      // Search and filter functionality
+      // SEARCH AND FILTER FUNCTIONALITY
       function filterTables() {
         const searchTerm = document.getElementById('search-input').value.trim().toUpperCase();
-
-        // Filter both tables
         filterTable('top-levels-body', searchTerm);
         filterTable('fastest-runs-body', searchTerm);
       }
@@ -1035,7 +1041,7 @@
         let visibleCount = 0;
 
         rows.forEach(row => {
-          const initialsCell = row.cells[1]; // Initials are in the second column
+          const initialsCell = row.cells[1];
           if (!initialsCell) return;
 
           const initials = initialsCell.textContent.trim().toUpperCase();
@@ -1048,7 +1054,6 @@
           }
         });
 
-        // Update rank numbers for visible rows
         updateRanks(tbody);
       }
 

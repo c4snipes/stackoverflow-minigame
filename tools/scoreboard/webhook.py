@@ -14,10 +14,14 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from socketserver import ThreadingMixIn
-from typing import Dict, Iterable, Optional, TypedDict, cast
+from typing import Dict, Iterable, Optional, cast
 from urllib import error as urlerror
 from urllib import parse as urlparse
 from urllib import request as urlrequest
+
+from .database import ScoreRepository
+from .models import ScoreEntryDict
+
 EntryMapping = Dict[str, object]
 
 
@@ -31,9 +35,7 @@ TOKEN_ENV = "SCOREBOARD_GITHUB_TOKEN"
 EVENT_ENV = "SCOREBOARD_EVENT"
 API_ENV = "SCOREBOARD_API_BASE"
 DB_ENV = "SCOREBOARD_DB_PATH"
-DEFAULT_DB_PATH = "/data/scoreboard.db"
-JSONL_ENV = "SCOREBOARD_JSONL_PATH"
-DEFAULT_JSONL_PATH = "/data/scoreboard.jsonl"
+DEFAULT_DB_PATH = "scoreboard.db"
 LEADERBOARD_LIMIT_ENV = "SCOREBOARD_LEADERBOARD_LIMIT"
 MAX_PAYLOAD_BYTES = 4096
 
@@ -49,6 +51,16 @@ class Config:
     event_type: str
     api_base: str
     secret: Optional[str]
+
+    def __str__(self) -> str:
+        """Safe string representation that masks secrets."""
+        return (
+            f"Config(repo={self.repo}, "
+            f"token={'***REDACTED***' if self.token else 'None'}, "
+            f"event_type={self.event_type}, "
+            f"api_base={self.api_base}, "
+            f"secret={'***REDACTED***' if self.secret else 'None'})"
+        )
 
 
 def _normalize(value: Optional[str]) -> Optional[str]:
@@ -115,219 +127,11 @@ class RateLimiter:
 
 RATE_LIMITER = RateLimiter(max_requests=60, window_seconds=60)
 
-
-class ScoreEntryDict(TypedDict):
-    id: str
-    initials: str
-    level: int
-    maxAltitude: float
-    runTimeTicks: int
-    victory: bool
-    timestampUtc: str
-
-
-class ScoreRepository:
-    def __init__(self, db_path: str, jsonl_path: str):
-        resolved = Path(db_path).expanduser()
-        if resolved.parent and not resolved.parent.exists():
-            resolved.parent.mkdir(parents=True, exist_ok=True)
-        self.path = str(resolved)
-
-        # Set up JSON file path
-        jsonl_resolved = Path(jsonl_path).expanduser()
-        if jsonl_resolved.parent and not jsonl_resolved.parent.exists():
-            jsonl_resolved.parent.mkdir(parents=True, exist_ok=True)
-        self.jsonl_path = str(jsonl_resolved)
-
-        try:
-            self._conn = sqlite3.connect(self.path, check_same_thread=False)
-        except sqlite3.Error as exc:
-            raise SystemExit(
-                f"Failed to open scoreboard database at {self.path}: {exc}") from exc
-        self._conn.row_factory = sqlite3.Row
-        self._initialize()
-
-    def _initialize(self) -> None:
-        with self._conn:
-            self._conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS scoreboard (
-                    id TEXT PRIMARY KEY,
-                    initials TEXT NOT NULL,
-                    level INTEGER NOT NULL,
-                    max_altitude REAL NOT NULL,
-                    run_time_ticks INTEGER NOT NULL,
-                    victory INTEGER NOT NULL,
-                    timestamp_utc TEXT NOT NULL
-                )
-                """
-            )
-
-    def upsert_entry(self, entry: ScoreEntryDict) -> None:
-        # Write to SQLite
-        with self._conn:
-            self._conn.execute(
-                """
-                INSERT INTO scoreboard (id, initials, level, max_altitude, run_time_ticks, victory, timestamp_utc)
-                VALUES (:id, :initials, :level, :max_altitude, :run_time_ticks, :victory, :timestamp_utc)
-                ON CONFLICT(id) DO UPDATE SET
-                    initials=excluded.initials,
-                    level=excluded.level,
-                    max_altitude=excluded.max_altitude,
-                    run_time_ticks=excluded.run_time_ticks,
-                    victory=excluded.victory,
-                    timestamp_utc=excluded.timestamp_utc
-                """,
-                {
-                    "id": entry["id"],
-                    "initials": entry["initials"],
-                    "level": entry["level"],
-                    "max_altitude": entry["maxAltitude"],
-                    "run_time_ticks": entry["runTimeTicks"],
-                    "victory": int(entry["victory"]),
-                    "timestamp_utc": entry["timestampUtc"],
-                },
-            )
-
-        # Also write to JSON file (append-only)
-        try:
-            with open(self.jsonl_path, 'a', encoding='utf-8') as f:
-                json.dump(entry, f)
-                f.write('\n')
-        except OSError as exc:
-            LOGGER.warning("Failed to write to JSON file %s: %s", self.jsonl_path, exc)
-
-    def leaderboard(self, limit: int, since: Optional[str] = None) -> Dict[str, object]:
-        limit = max(1, min(limit, 100))
-
-        # Build SQL filter for time range
-        where_clause = ""
-        params_top: list[int] = [limit]
-        params_fast: list[int] = [limit]
-
-        if since:
-            where_clause = "WHERE timestamp_utc >= ?"
-            params_top = [int(since), limit] if since.isdigit() else [limit]
-            params_fast = [int(since), limit] if since.isdigit() else [limit]
-
-        with self._conn:
-            # Top levels query
-            top_query = f"""
-                SELECT * FROM scoreboard
-                {where_clause}
-                ORDER BY level DESC, run_time_ticks ASC
-                LIMIT ?
-            """
-            top_rows = self._conn.execute(top_query, tuple(params_top)).fetchall()
-
-            # Fastest runs query
-            fast_where = f"{where_clause} AND run_time_ticks > 0 AND level > 0" if where_clause else "WHERE run_time_ticks > 0 AND level > 0"
-            fast_query = f"""
-                SELECT * FROM scoreboard
-                {fast_where}
-                ORDER BY run_time_ticks ASC, level DESC
-                LIMIT ?
-            """
-            fast_rows = self._conn.execute(fast_query, params_fast).fetchall()
-
-            # Count query
-            count_query = f"SELECT COUNT(*) AS count FROM scoreboard {where_clause}"
-            count_params = [since] if since else []
-            count_row = self._conn.execute(count_query, count_params).fetchone()
-
-        return {
-            "count": count_row["count"] if count_row else 0,
-            "topLevels": [self._row_to_entry(row) for row in top_rows],
-            "fastestRuns": [self._row_to_entry(row) for row in fast_rows],
-            "stats": self.get_global_stats(since),
-        }
-
-    def get_global_stats(self, since: Optional[str] = None) -> Dict[str, object]:
-        where_clause = "WHERE timestamp_utc >= ?" if since else ""
-        params = [since] if since else []
-
-        with self._conn:
-            # Get basic stats
-            stats_query = f"""
-                SELECT
-                    COUNT(DISTINCT initials) as total_players,
-                    COUNT(*) as total_runs,
-                    CAST(AVG(level) AS INTEGER) as average_level,
-                    MAX(level) as highest_level,
-                    MIN(CASE WHEN run_time_ticks > 0 THEN run_time_ticks END) as fastest_time_ticks
-                FROM scoreboard
-                {where_clause}
-            """
-            stats_row = self._conn.execute(stats_query, params).fetchone()
-
-            if not stats_row or stats_row["total_runs"] == 0:
-                return {
-                    "totalPlayers": 0,
-                    "totalRuns": 0,
-                    "averageLevel": 0,
-                    "highestLevel": 0,
-                    "fastestTimeTicks": 0,
-                    "topPlayer": "N/A",
-                    "fastestPlayer": "N/A",
-                }
-
-            # Get top player
-            top_player_query = f"""
-                SELECT initials, MAX(level) as max_level
-                FROM scoreboard
-                {where_clause}
-                GROUP BY initials
-                ORDER BY max_level DESC
-                LIMIT 1
-            """
-            top_player_row = self._conn.execute(top_player_query, params).fetchone()
-
-            # Get fastest player
-            fastest_player_query = f"""
-                SELECT initials
-                FROM scoreboard
-                {where_clause}
-                WHERE run_time_ticks > 0
-                ORDER BY run_time_ticks ASC
-                LIMIT 1
-            """
-            fastest_player_row = self._conn.execute(fastest_player_query, params).fetchone()
-
-        return {
-            "totalPlayers": stats_row["total_players"] or 0,
-            "totalRuns": stats_row["total_runs"] or 0,
-            "averageLevel": stats_row["average_level"] or 0,
-            "highestLevel": stats_row["highest_level"] or 0,
-            "fastestTimeTicks": stats_row["fastest_time_ticks"] or 0,
-            "topPlayer": top_player_row["initials"] if top_player_row else "N/A",
-            "fastestPlayer": fastest_player_row["initials"] if fastest_player_row else "N/A",
-        }
-
-    @staticmethod
-    def _row_to_entry(row: sqlite3.Row) -> ScoreEntryDict:
-        return {
-            "id": row["id"],
-            "initials": row["initials"],
-            "level": row["level"],
-            "maxAltitude": row["max_altitude"],
-            "runTimeTicks": row["run_time_ticks"],
-            "victory": bool(row["victory"]),
-            "timestampUtc": row["timestamp_utc"],
-        }
-
-
 def resolve_db_path() -> str:
     env_path = _normalize(os.environ.get(DB_ENV))
     if env_path:
         return env_path
     return DEFAULT_DB_PATH
-
-
-def resolve_jsonl_path() -> str:
-    env_path = _normalize(os.environ.get(JSONL_ENV))
-    if env_path:
-        return env_path
-    return DEFAULT_JSONL_PATH
 
 
 def resolve_leaderboard_limit() -> int:
@@ -341,7 +145,7 @@ def resolve_leaderboard_limit() -> int:
 
 
 try:
-    REPOSITORY = ScoreRepository(resolve_db_path(), resolve_jsonl_path())
+    REPOSITORY = ScoreRepository(resolve_db_path())
 except SystemExit:
     raise
 except Exception as exc:  # noqa: BLE001
@@ -363,7 +167,7 @@ def normalize_entry(data: Dict[str, object]) -> ScoreEntryDict:
     initials = initials[:3]
     level_value = data.get("level", data.get("score", 0))
     run_time_value = data.get("runTimeTicks", data.get("run_time_ticks", 0))
-    max_altitude_value = data.get("maxAltitude", data.get("max_altitude", 0.0))
+    # max_altitude_value = data.get("maxAltitude", data.get("max_altitude", 0.0))  # REMOVED - No longer needed
     victory_value = data.get("victory", False)
     timestamp = data.get("timestampUtc") or datetime.now(timezone.utc).isoformat()
     try:
@@ -374,16 +178,16 @@ def normalize_entry(data: Dict[str, object]) -> ScoreEntryDict:
         run_time_ticks = int(str(run_time_value))
     except (TypeError, ValueError):
         run_time_ticks = 0
-    try:
-        max_altitude = float(str(max_altitude_value))
-    except (TypeError, ValueError):
-        max_altitude = 0.0
+    # try:
+    #     max_altitude = float(str(max_altitude_value))
+    # except (TypeError, ValueError):
+    #     max_altitude = 0.0
     victory = _to_bool(victory_value)
     return {
         "id": entry_id,
         "initials": initials,
         "level": level,
-        "maxAltitude": max_altitude,
+        # "maxAltitude": max_altitude,  # REMOVED - No longer tracked
         "runTimeTicks": run_time_ticks,
         "victory": victory,
         "timestampUtc": str(timestamp),
@@ -402,6 +206,28 @@ def _to_bool(value: object) -> bool:
 
 class ScoreboardHandler(BaseHTTPRequestHandler):
     server_version = "ScoreboardWebhook/1.0"
+
+    def _add_security_headers(self) -> None:
+        """Add security headers to all responses."""
+        # HSTS - Force HTTPS for 1 year (only applies if served over HTTPS)
+        self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+        # Prevent MIME type sniffing
+        self.send_header("X-Content-Type-Options", "nosniff")
+
+        # Prevent clickjacking
+        self.send_header("X-Frame-Options", "DENY")
+
+        # XSS Protection (legacy but still good)
+        self.send_header("X-XSS-Protection", "1; mode=block")
+
+        # Referrer policy
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+
+        # Permissions policy - disable unnecessary features
+        self.send_header("Permissions-Policy",
+                        "accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
+                        "magnetometer=(), microphone=(), payment=(), usb=()")
 
     def _check_rate_limit(self) -> bool:
         """Check if client is rate limited. Returns True if allowed."""
@@ -423,6 +249,7 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
         parsed = urlparse.urlparse(self.path)
         if parsed.path == "/healthz":
             self.send_response(HTTPStatus.OK)
+            self._add_security_headers()
             self.end_headers()
             self.wfile.write(b"ok")
             return
@@ -497,6 +324,7 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.ACCEPTED)
         if dispatch_warning:
             self.send_header("X-Dispatch-Status", "failed")
+        self._add_security_headers()
         self.end_headers()
         self.wfile.write(b"queued")
 
@@ -551,6 +379,7 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
+        self._add_security_headers()
         self.end_headers()
         self.wfile.write(body)
 
@@ -568,6 +397,15 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
+
+        # Add CSP for HTML pages - allow inline styles for the retro CRT theme
+        self.send_header("Content-Security-Policy",
+                        "default-src 'none'; "
+                        "style-src 'self' 'unsafe-inline'; "
+                        "img-src 'self' data:; "
+                        "font-src 'self'")
+
+        self._add_security_headers()
         self.end_headers()
         self.wfile.write(body)
 
@@ -615,9 +453,29 @@ class ScoreboardHandler(BaseHTTPRequestHandler):
 
     def _authorize(self) -> bool:
         if CONFIG.secret is None:
+            LOGGER.critical(
+                "⚠️  AUTHENTICATION DISABLED! SCOREBOARD_SECRET not set. "
+                "Anyone can POST scores to this endpoint. "
+                "This is INSECURE for production use!"
+            )
             return True
+
         provided = self.headers.get("X-Scoreboard-Secret", "")
+        if not provided:
+            LOGGER.warning(
+                "Authentication attempt with missing secret from IP: %s",
+                self.client_address[0]
+            )
+            self.send_error(HTTPStatus.UNAUTHORIZED,
+                            "Missing X-Scoreboard-Secret header.")
+            return False
+
         if not secrets.compare_digest(provided.strip(), CONFIG.secret):
+            LOGGER.warning(
+                "Failed authentication attempt from IP: %s, User-Agent: %s",
+                self.client_address[0],
+                self.headers.get("User-Agent", "unknown")
+            )
             self.send_error(HTTPStatus.UNAUTHORIZED,
                             "Invalid X-Scoreboard-Secret header.")
             return False
@@ -698,12 +556,15 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
 
 
 def build_server():
-    host = os.environ.get(HOST_ENV, "0.0.0.0")
+    # Default to localhost for security - set SCOREBOARD_HOST=0.0.0.0 for network access
+    host = os.environ.get(HOST_ENV, "127.0.0.1")
     port_value = os.environ.get(PORT_ENV) or os.environ.get(
         FALLBACK_PLATFORM_PORT_ENV) or "8080"
     port = int(port_value)
     httpd = ThreadingHTTPServer((host, port), ScoreboardHandler)
     LOGGER.info("Listening on http://%s:%s/scoreboard", host, port)
+    if host == "127.0.0.1":
+        LOGGER.info("🔒 Bound to localhost only - set SCOREBOARD_HOST=0.0.0.0 for network access")
     return httpd
 
 
@@ -711,9 +572,21 @@ def main():
     LOGGER.info("Loaded configuration: repo=%s event=%s api_base=%s secret=%s",
                 CONFIG.repo, CONFIG.event_type, CONFIG.api_base, "set" if CONFIG.secret else "unset")
     LOGGER.info("Using SQLite database at %s", REPOSITORY.path)
-    LOGGER.info("Using JSON file at %s", REPOSITORY.jsonl_path)
     LOGGER.info("Rate limiting enabled: %d requests per %d seconds per IP",
                 RATE_LIMITER.max_requests, RATE_LIMITER.window_seconds)
+
+    # Security warning if authentication is disabled
+    if CONFIG.secret:
+        LOGGER.info("✅ Authentication enabled - SCOREBOARD_SECRET is set")
+    else:
+        LOGGER.critical("=" * 80)
+        LOGGER.critical("⚠️  SECURITY WARNING: AUTHENTICATION DISABLED!")
+        LOGGER.critical("⚠️  SCOREBOARD_SECRET environment variable is NOT set!")
+        LOGGER.critical("⚠️  Anyone can POST scores to this server without authentication!")
+        LOGGER.critical("⚠️  This is INSECURE for production deployments!")
+        LOGGER.critical("⚠️  Set SCOREBOARD_SECRET environment variable to enable authentication.")
+        LOGGER.critical("=" * 80)
+
     server = build_server()
 
     # Periodically clean up rate limiter

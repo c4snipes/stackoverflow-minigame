@@ -100,3 +100,12 @@ PRESENTATION-SETUP.md
 create-launcher-app.sh
 Launch Demo.app
 CODE_QUALITY_REPORT.md
+
+# Security and refactoring reports
+REFACTORING_REPORT.md
+REFACTORING_COMPLETED.md
+SECURITY_CODE_QUALITY_AUDIT.md
+SECURITY_SCAN_RESULTS.md
+bandit-report.txt
+safety-report.json
+mypy-report.txt
