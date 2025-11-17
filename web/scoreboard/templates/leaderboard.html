@@ -102,14 +102,14 @@
       }
 
       .prompt-line {
-        color: #0d0;
+        color: #0a0;
         font-size: 1.05rem;
         margin-bottom: 15px;
       }
 
       .prompt-char {
-        color: #0f0;
-        text-shadow: 0 0 8px #0f0;
+        color: #0d0;
+        text-shadow: none;
       }
 
       .ascii-title {
@@ -773,12 +773,24 @@
 
       async function refreshLeaderboard(since = null) {
         showLoading();
+
+        // Abort any pending requests
+        if (window.pendingRequest) {
+          window.pendingRequest.abort();
+        }
+
+        const controller = new AbortController();
+        window.pendingRequest = controller;
+
         try {
           const url = since ? `/scoreboard?since=${since}` : '/scoreboard';
-          const response = await fetch(url);
+          const response = await fetch(url, { signal: controller.signal });
           if (!response.ok) throw new Error('Failed to fetch');
 
           const data = await response.json();
+
+          // Clear reference after successful fetch
+          window.pendingRequest = null;
 
           updateTable('top-levels-body', data.topLevels, (entry, rank) => `
             <tr class="fade-in">
@@ -811,7 +823,10 @@
           }
 
         } catch (error) {
-          console.error('Failed to refresh leaderboard:', error);
+          if (error.name !== 'AbortError') {
+            console.error('Failed to refresh leaderboard:', error);
+          }
+          window.pendingRequest = null;
         } finally {
           hideLoading();
         }
@@ -947,11 +962,19 @@
       });
 
       window.addEventListener('beforeunload', () => {
+        // Clear all timers
         if (autoRefreshInterval) {
           clearInterval(autoRefreshInterval);
+          autoRefreshInterval = null;
         }
 
-        // Clean up to prevent memory leaks
+        // Abort any pending requests
+        if (window.pendingRequest) {
+          window.pendingRequest.abort();
+          window.pendingRequest = null;
+        }
+
+        // Clean up event listeners
         document.removeEventListener('visibilitychange', handleVisibilityChange);
       });
     </script>
