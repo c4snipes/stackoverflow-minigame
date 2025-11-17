@@ -208,10 +208,11 @@ namespace stackoverflow_minigame
             GlobalStats stats = new GlobalStats();
             string? topError = null;
 
-            bool remoteSucceeded = TryFetchRemoteLeaderboard(out var remoteTop, out var remoteFast, out var remoteError);
+            bool remoteSucceeded = TryFetchRemoteLeaderboard(out var remoteTop, out var remoteFast, out var remoteStats, out var remoteError);
             if (remoteSucceeded)
             {
                 topScores = remoteTop;
+                stats = remoteStats ?? new GlobalStats();
             }
             else
             {
@@ -344,10 +345,11 @@ namespace stackoverflow_minigame
             }
         }
 
-        private bool TryFetchRemoteLeaderboard(out IReadOnlyList<ScoreEntry> topScores, out IReadOnlyList<ScoreEntry> fastestRuns, out string? error)
+        private bool TryFetchRemoteLeaderboard(out IReadOnlyList<ScoreEntry> topScores, out IReadOnlyList<ScoreEntry> fastestRuns, out GlobalStats? stats, out string? error)
         {
             topScores = Array.Empty<ScoreEntry>();
             fastestRuns = Array.Empty<ScoreEntry>();
+            stats = null;
             error = null;
             if (remoteClient == null || remoteUri == null)
             {
@@ -376,6 +378,7 @@ namespace stackoverflow_minigame
 
                 topScores = payload.TopLevels ?? (IReadOnlyList<ScoreEntry>)Array.Empty<ScoreEntry>();
                 fastestRuns = payload.FastestRuns ?? (IReadOnlyList<ScoreEntry>)Array.Empty<ScoreEntry>();
+                stats = payload.Stats;
                 return true;
             }
             catch (Exception ex)
@@ -426,6 +429,9 @@ namespace stackoverflow_minigame
 
             [JsonPropertyName("fastestRuns")]
             public List<ScoreEntry>? FastestRuns { get; set; }
+
+            [JsonPropertyName("stats")]
+            public GlobalStats? Stats { get; set; }
         }
     }
 }

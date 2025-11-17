@@ -15,6 +15,20 @@ namespace stackoverflow_minigame
 
         private static void Main(string[] args)
         {
+            // Load environment variables from .env file if it exists
+            try
+            {
+                DotNetEnv.Env.Load();
+            }
+            catch (FileNotFoundException)
+            {
+                // .env file is optional, continue without it
+            }
+            catch (Exception ex)
+            {
+                Diagnostics.ReportWarning($"Failed to load .env file: {ex.Message}");
+            }
+
             var parsedArgs = NormalizeArgs(args, out var unknownArgs, out bool hasParseError);
             if (hasParseError || unknownArgs.Count > 0)
             {

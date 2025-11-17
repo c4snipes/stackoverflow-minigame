@@ -15,7 +15,7 @@ namespace stackoverflow_minigame
         private readonly List<Platform> platforms;
         private readonly Random rand;
         internal IReadOnlyList<Platform> Platforms => platforms;
-        internal const float JumpVelocity = 3.2f;
+        internal const float JumpVelocity = 2.6f; // Reduced from 3.2f to make jumps feel less zippy
         public float MaxAltitude { get; private set; }
         public int LevelsCompleted { get; private set; }
         public const int GoalPlatforms = 256;

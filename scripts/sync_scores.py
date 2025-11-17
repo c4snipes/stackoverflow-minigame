@@ -7,6 +7,21 @@ import sys
 import urllib.request
 import urllib.error
 from typing import TypedDict
+from pathlib import Path
+
+# Load .env file if it exists
+def load_env():
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ[key.strip()] = value.strip()
+
+load_env()
+
 REMOTE_URL = "https://stackoverflow-minigame.fly.dev/scoreboard"
 LOCAL_DB = "scoreboard.db"
 SECRET = os.environ.get("STACKOVERFLOW_SCOREBOARD_WEBHOOK_SECRET", "")

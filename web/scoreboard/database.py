@@ -30,6 +30,14 @@ class ScoreRepository:
         resolved = Path(db_path).expanduser()
         if resolved.parent and not resolved.parent.exists():
             resolved.parent.mkdir(parents=True, exist_ok=True)
+
+        # Ensure the database file is writable by creating it with proper permissions
+        if not resolved.exists():
+            try:
+                resolved.touch(mode=0o666)
+            except (OSError, PermissionError):
+                pass  # Continue anyway, let SQLite handle creation
+
         self.path = str(resolved)
         self._conn: Optional[sqlite3.Connection] = None
 
@@ -181,11 +189,11 @@ class ScoreRepository:
                 """
                 top_rows = self._conn.execute(top_query, (limit,)).fetchall()
 
-            # Fastest runs query
+            # Fastest runs query - only show victorious runs
             if since_validated:
                 fast_query = """
                     SELECT * FROM scoreboard
-                    WHERE timestamp_utc >= ? AND run_time_ticks > 0 AND level > 0
+                    WHERE timestamp_utc >= ? AND run_time_ticks > 0 AND level > 0 AND victory = 1
                     ORDER BY run_time_ticks ASC, level DESC
                     LIMIT ?
                 """
@@ -193,7 +201,7 @@ class ScoreRepository:
             else:
                 fast_query = """
                     SELECT * FROM scoreboard
-                    WHERE run_time_ticks > 0 AND level > 0
+                    WHERE run_time_ticks > 0 AND level > 0 AND victory = 1
                     ORDER BY run_time_ticks ASC, level DESC
                     LIMIT ?
                 """
