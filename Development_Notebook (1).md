@@ -4,7 +4,7 @@
 **Guideline:** 
 
 - Please document all your development activities, whether you use any AI coding tool or not. You might mix your manual coding or AI tool usage. Just document the entire process. 
-  - If this is a team project or assignment, list all team members’ names in the “Name” field. For each iteration, record the name of the person who contributed any part of the work in the “What do you do?” field.
+  - If this is a team project or assignment, list all team members' names in the "Name" field. For each iteration, record the name of the person who contributed any part of the work in the "What do you do?" field.
 - Any interactions with AI coding tools such as ChatGPT, Gemini, Copilot, and others must capture the full conversation history. 
 - Use the format below to record your development activities in a clear and consistent manner. 
   - Adding more iteration sections if needed.
@@ -19,7 +19,7 @@
 
   - **What do you do?** 
 
-    Asked ChatGPT to build the first playable shell based on our “StackOverflow Doodle Jump” pitch and scaffold the main classes (player, world, renderer).  
+    Asked ChatGPT to build the first playable shell based on our "StackOverflow Doodle Jump" pitch and scaffold the main classes (player, world, renderer).  
         – Cole S.  
     Initialized the repo, created the .NET project, and wired up the build so we could actually run the placeholder loop.  
         – Harrison S.
@@ -41,7 +41,7 @@
         – Harrison & Cole  
     Built the Python webhook service + SQLite schema, then added the GitHub dispatcher bridge.  
         – Cole S.  
-    Wrote a tiny CLI (`forward_payload.py`) to replay payloads into the remote service for testing.  
+    Wrote a tiny CLI (`forward_payload.py`) to replay payloads into the remote service for testing. which was later scraped. 
         – Harrison S.
 
  
@@ -50,7 +50,7 @@
 
     Local runs show up immediately in `scoreboard.jsonl`, the webhook echoes them into SQLite on Fly, and the GitHub dispatch fires whenever the server is reachable.
 
-- **Your Evaluation:** Persistent storage works and we can inspect history without leaving the game. Keeping the JSONL file felt redundant once the DB was up, but it’s still handy for offline play, so we left it.
+- **Your Evaluation:** Persistent storage works and we can inspect history without leaving the game. Keeping the JSONL file felt redundant once the DB was up, but it's still handy for offline play, so we left it.
 
 - **Iteration 3:**
   - **Goal/Task/Rationale:**
@@ -58,8 +58,6 @@
 
   - **What do you do?** 
 
-    Added `ConsoleSafe` wrappers so HUD rendering and menu input stop crashing on tiny terminals.  
-        – Harrison S.  
     Created `Utils/ProfanityFilter` and hooked it into the initials prompt so arcade-style three-letter names stay clean.  
         – Cole S.  
     Reworked the leaderboard viewer so it can fetch the remote scores at any time and handles HTTP failures gracefully.  
@@ -77,9 +75,9 @@
 
   - **What do you do?** 
 
-    Broke the single-folder C# project into `Core`, `Gameplay`, `Rendering`, `Scoreboard`, and `UI` directories, updated the csproj globs, and re-ran builds.  
+    Broke the single-folder C# project into `Core`, `Game`, `Rendering`, `Scoreboard`, `UI`, and `Utils` directories, updated the csproj globs, and re-ran builds.  
         – Cole S.  
-    Hardened `Tracing` with a bounded queue, retryable log writer, and shutdown hooks so background logging can’t hang the process.  
+    Hardened `Tracing` with a bounded queue, retryable log writer, and shutdown hooks so background logging can't hang the process.  
         – Harrison S.  
     Cleaned up the Fly deployment flow (documented `fly deploy`, refreshed Dockerfile) and validated the webhook template loader.  
         – Harrison & Cole
@@ -88,4 +86,31 @@
 
     Builds are faster to navigate, tracing survives noisy sessions without eating RAM, and Fly deploys now have a single documented path.
 
-- **Your Evaluation:** This organization feels much easier to maintain. No regressions after the restructure, so we’re locking it in.
+- **Your Evaluation:** This organization feels much easier to maintain. No regressions after the restructure, so we're locking it in.
+
+- **Iteration 5:**
+  - **Goal/Task/Rationale:**
+      Finalize deployment and automation.
+
+  - **What do you do?** 
+
+    Set up GitHub Actions workflows for automated builds, Docker images, and Fly.io deployment on push.  
+        – Cole & Harrison  
+    Deployed live leaderboard to `stackoverflow-minigame.fly.dev` with persistent SQLite storage on Fly volumes.  
+        – Cole S.  
+    Added score sync script and configured environment variables for webhook authentication.  
+        – Harrison S.
+
+- **Response/Result:**
+
+    Game is fully deployed and accessible via Codespaces. Leaderboard shows global rankings and updates in real-time.
+
+- **Your Evaluation:** CI/CD pipeline works smoothly. Players can compete globally and everything syncs automatically.
+
+---
+
+**Current Project Status:**
+- **Structure:** `Core/` (program entry), `Game/` (entities, world, spawner), `Rendering/` (glyphs), `UI/` (menus), `Scoreboard/` (tracking), `Utils/` (profanity filter, tracing)
+- **Deployment:** Live at `stackoverflow-minigame.fly.dev` with CI/CD via GitHub Actions
+- **Features:** 256 levels, HUD toggle (H key), real-time leaderboard viewer (L key), SQLite persistence with remote sync
+- **Tech:** .NET 9, Python Flask webhook, SQLite, Docker, Fly.io

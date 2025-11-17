@@ -1,0 +1,155 @@
+digraph StackOverflowJump {
+    // Graph settings
+    rankdir=TB;
+    node [shape=box, style="rounded,filled", fontname="Arial", fontsize=10];
+    edge [fontname="Arial", fontsize=9];
+
+    // Color scheme
+    node [fillcolor=lightblue];
+
+    // Main project
+    project [label="StackOverflow Jump\nC# Console Game\n.NET 9", shape=box, fillcolor="#4A90E2", fontcolor=white, fontsize=12, style="rounded,filled"];
+
+    // Source directories
+    subgraph cluster_src {
+        label="src/ - Main Source Code";
+        style=filled;
+        fillcolor=lightgray;
+
+        // Core
+        subgraph cluster_core {
+            label="Core/ (6 files)";
+            style=filled;
+            fillcolor="#E8F4F8";
+
+            core_program [label="Program.cs\nEntry Point"];
+            core_input [label="Input.cs\nAsync Input"];
+            core_console [label="ConsoleSafe.cs\nSafe Console"];
+            core_diag [label="Diagnostics.cs\nDebug Logging"];
+            core_term [label="TerminalCapabilities.cs\nFeature Detection"];
+            core_time [label="TimeFormatting.cs\nTime Utils"];
+        }
+
+        // Game
+        subgraph cluster_game {
+            label="Game/ (4 files)";
+            style=filled;
+            fillcolor="#FFE8CC";
+
+            game_game [label="Game.cs\nState & Logic"];
+            game_world [label="World.cs\nPhysics"];
+            game_entities [label="Entities.cs\nPlayer & Platforms"];
+            game_spawner [label="Spawner.cs\nPlatform Gen"];
+        }
+
+        // Rendering
+        subgraph cluster_render {
+            label="Rendering/ (2 files)";
+            style=filled;
+            fillcolor="#E8F8E8";
+
+            render_renderer [label="Renderer.cs\nScreen Rendering"];
+            render_glyph [label="GlyphLibrary.cs\nASCII Art"];
+        }
+
+        // UI
+        subgraph cluster_ui {
+            label="UI/ (2 files)";
+            style=filled;
+            fillcolor="#F8E8F8";
+
+            ui_prompt [label="InitialsPrompt.cs\nName Entry"];
+            ui_leader [label="LeaderboardViewer.cs\nScore Display"];
+        }
+
+        // Scoreboard
+        subgraph cluster_score {
+            label="Scoreboard/ (1 file)";
+            style=filled;
+            fillcolor="#FFF8CC";
+
+            score_board [label="Scoreboard.cs\nSQLite + Sync"];
+        }
+
+        // Utils
+        subgraph cluster_utils {
+            label="Utils/ (3 files)";
+            style=filled;
+            fillcolor="#CCE8FF";
+
+            utils_prof [label="ProfanityFilter.cs\nName Validation"];
+            utils_math [label="MathHelpers.cs\nMath Utils"];
+            utils_trace [label="Tracing.cs\nBG Logging"];
+        }
+    }
+
+    // Web service
+    subgraph cluster_web {
+        label="web/scoreboard/ - Python Flask";
+        style=filled;
+        fillcolor="#FFE0E0";
+
+        web_init [label="__init__.py\nFlask Init"];
+        web_webhook [label="webhook.py\nScore API"];
+        web_db [label="database.py\nDB Ops"];
+        web_models [label="models.py\nData Models"];
+        web_html [label="leaderboard.html\nWeb UI"];
+    }
+
+    // CI/CD
+    subgraph cluster_cicd {
+        label=".github/workflows/ - CI/CD";
+        style=filled;
+        fillcolor="#E0FFE0";
+
+        cicd_dotnet [label="dotnet.yml\n.NET Build"];
+        cicd_docker [label="docker-build.yml\nDocker Images"];
+        cicd_deploy [label="deploy-fly.yml\nFly.io Deploy"];
+    }
+
+    // Deployment
+    deployment [label="Fly.io Deployment\nstackoverflow-minigame.fly.dev", shape=box, fillcolor="#50C878", fontcolor=white, style="rounded,filled"];
+
+    // Config files
+    config [label="Configuration\n• .csproj\n• Dockerfile\n• fly.toml", shape=note, fillcolor="#FFFFE0"];
+
+    // Main connections - simplified hierarchy
+    project -> cluster_src;
+    project -> cluster_web;
+    project -> cluster_cicd;
+    project -> config;
+
+    // Core connections
+    core_program -> game_game [label="runs"];
+    core_input -> game_game [label="provides input"];
+
+    // Game flow
+    game_game -> game_world [label="updates"];
+    game_world -> game_entities [label="manages"];
+    game_world -> game_spawner [label="uses"];
+
+    // Rendering flow
+    game_game -> render_renderer [label="draws"];
+    render_renderer -> render_glyph [label="uses"];
+
+    // UI connections
+    game_game -> ui_prompt [label="shows"];
+    game_game -> ui_leader [label="displays"];
+
+    // Scoreboard connections
+    game_game -> score_board [label="records"];
+    score_board -> web_webhook [label="syncs to", style=dashed];
+
+    // Web connections
+    web_webhook -> web_db [label="stores"];
+    web_db -> web_models [label="uses"];
+    web_webhook -> web_html [label="serves"];
+
+    // Deployment connections
+    cluster_cicd -> deployment [label="deploys", color=green, penwidth=2];
+    cluster_web -> deployment [label="runs on", color=blue, style=dashed];
+
+    // Utils usage
+    ui_prompt -> utils_prof [label="filters"];
+    game_world -> utils_math [label="uses"];
+}

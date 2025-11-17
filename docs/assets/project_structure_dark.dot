@@ -1,0 +1,162 @@
+digraph StackOverflowJump {
+    // Graph settings - DARK MODE
+    rankdir=TB;
+    bgcolor="#1e1e1e";  // Dark background
+    node [shape=box, style="rounded,filled", fontname="Arial", fontsize=10, fontcolor=white];
+    edge [fontname="Arial", fontsize=9, color=white, fontcolor=white];
+
+    // Main project - Bright blue with white text
+    project [label="StackOverflow Jump\nC# Console Game\n.NET 9", shape=box, fillcolor="#0078D4", fontcolor=white, fontsize=12, style="rounded,filled"];
+
+    // Source directories
+    subgraph cluster_src {
+        label="src/ - Main Source Code";
+        style=filled;
+        fillcolor="#2d2d30";
+        fontcolor=white;
+
+        // Core - Blue theme
+        subgraph cluster_core {
+            label="Core/ (6 files)";
+            style=filled;
+            fillcolor="#1e3a5f";
+            fontcolor=white;
+
+            core_program [label="Program.cs\nEntry Point", fillcolor="#2b5278", fontcolor=white];
+            core_input [label="Input.cs\nAsync Input", fillcolor="#2b5278", fontcolor=white];
+            core_console [label="ConsoleSafe.cs\nSafe Console", fillcolor="#2b5278", fontcolor=white];
+            core_diag [label="Diagnostics.cs\nDebug Logging", fillcolor="#2b5278", fontcolor=white];
+            core_term [label="TerminalCapabilities.cs\nFeature Detection", fillcolor="#2b5278", fontcolor=white];
+            core_time [label="TimeFormatting.cs\nTime Utils", fillcolor="#2b5278", fontcolor=white];
+        }
+
+        // Game - Orange theme
+        subgraph cluster_game {
+            label="Game/ (4 files)";
+            style=filled;
+            fillcolor="#4a3520";
+            fontcolor=white;
+
+            game_game [label="Game.cs\nState & Logic", fillcolor="#8b5a2b", fontcolor=white];
+            game_world [label="World.cs\nPhysics", fillcolor="#8b5a2b", fontcolor=white];
+            game_entities [label="Entities.cs\nPlayer & Platforms", fillcolor="#8b5a2b", fontcolor=white];
+            game_spawner [label="Spawner.cs\nPlatform Gen", fillcolor="#8b5a2b", fontcolor=white];
+        }
+
+        // Rendering - Green theme
+        subgraph cluster_render {
+            label="Rendering/ (2 files)";
+            style=filled;
+            fillcolor="#1e3a1e";
+            fontcolor=white;
+
+            render_renderer [label="Renderer.cs\nScreen Rendering", fillcolor="#2d5a2d", fontcolor=white];
+            render_glyph [label="GlyphLibrary.cs\nASCII Art", fillcolor="#2d5a2d", fontcolor=white];
+        }
+
+        // UI - Purple theme
+        subgraph cluster_ui {
+            label="UI/ (2 files)";
+            style=filled;
+            fillcolor="#3a1e3a";
+            fontcolor=white;
+
+            ui_prompt [label="InitialsPrompt.cs\nName Entry", fillcolor="#5a2d5a", fontcolor=white];
+            ui_leader [label="LeaderboardViewer.cs\nScore Display", fillcolor="#5a2d5a", fontcolor=white];
+        }
+
+        // Scoreboard - Gold theme
+        subgraph cluster_score {
+            label="Scoreboard/ (1 file)";
+            style=filled;
+            fillcolor="#3a3a1e";
+            fontcolor=white;
+
+            score_board [label="Scoreboard.cs\nSQLite + Sync", fillcolor="#6b6b2d", fontcolor=white];
+        }
+
+        // Utils - Cyan theme
+        subgraph cluster_utils {
+            label="Utils/ (3 files)";
+            style=filled;
+            fillcolor="#1e3a3a";
+            fontcolor=white;
+
+            utils_prof [label="ProfanityFilter.cs\nName Validation", fillcolor="#2d5a5a", fontcolor=white];
+            utils_math [label="MathHelpers.cs\nMath Utils", fillcolor="#2d5a5a", fontcolor=white];
+            utils_trace [label="Tracing.cs\nBG Logging", fillcolor="#2d5a5a", fontcolor=white];
+        }
+    }
+
+    // Web service - Pink/Red theme
+    subgraph cluster_web {
+        label="web/scoreboard/ - Python Flask";
+        style=filled;
+        fillcolor="#3a1e1e";
+        fontcolor=white;
+
+        web_init [label="__init__.py\nFlask Init", fillcolor="#6b2d2d", fontcolor=white];
+        web_webhook [label="webhook.py\nScore API", fillcolor="#6b2d2d", fontcolor=white];
+        web_db [label="database.py\nDB Ops", fillcolor="#6b2d2d", fontcolor=white];
+        web_models [label="models.py\nData Models", fillcolor="#6b2d2d", fontcolor=white];
+        web_html [label="leaderboard.html\nWeb UI", fillcolor="#6b2d2d", fontcolor=white];
+    }
+
+    // CI/CD - Bright green theme
+    subgraph cluster_cicd {
+        label=".github/workflows/ - CI/CD";
+        style=filled;
+        fillcolor="#1e3a1e";
+        fontcolor=white;
+
+        cicd_dotnet [label="dotnet.yml\n.NET Build", fillcolor="#2d6b2d", fontcolor=white];
+        cicd_docker [label="docker-build.yml\nDocker Images", fillcolor="#2d6b2d", fontcolor=white];
+        cicd_deploy [label="deploy-fly.yml\nFly.io Deploy", fillcolor="#2d6b2d", fontcolor=white];
+    }
+
+    // Deployment - Bright green
+    deployment [label="Fly.io Deployment\nstackoverflow-minigame.fly.dev", shape=box, fillcolor="#107c10", fontcolor=white, style="rounded,filled"];
+
+    // Config files - Yellow
+    config [label="Configuration\n• .csproj\n• Dockerfile\n• fly.toml", shape=note, fillcolor="#6b6b2d", fontcolor=white];
+
+    // Main connections - white/light gray arrows
+    project -> cluster_src [color="#888888"];
+    project -> cluster_web [color="#888888"];
+    project -> cluster_cicd [color="#888888"];
+    project -> config [color="#888888"];
+
+    // Core connections
+    core_program -> game_game [label="runs", color="#888888", fontcolor=white];
+    core_input -> game_game [label="provides input", color="#888888", fontcolor=white];
+
+    // Game flow
+    game_game -> game_world [label="updates", color="#888888", fontcolor=white];
+    game_world -> game_entities [label="manages", color="#888888", fontcolor=white];
+    game_world -> game_spawner [label="uses", color="#888888", fontcolor=white];
+
+    // Rendering flow
+    game_game -> render_renderer [label="draws", color="#888888", fontcolor=white];
+    render_renderer -> render_glyph [label="uses", color="#888888", fontcolor=white];
+
+    // UI connections
+    game_game -> ui_prompt [label="shows", color="#888888", fontcolor=white];
+    game_game -> ui_leader [label="displays", color="#888888", fontcolor=white];
+
+    // Scoreboard connections
+    game_game -> score_board [label="records", color="#888888", fontcolor=white];
+    score_board -> web_webhook [label="syncs to", style=dashed, color="#888888", fontcolor=white];
+
+    // Web connections
+    web_webhook -> web_db [label="stores", color="#888888", fontcolor=white];
+    web_db -> web_models [label="uses", color="#888888", fontcolor=white];
+    web_webhook -> web_html [label="serves", color="#888888", fontcolor=white];
+
+    // Deployment connections
+    cluster_cicd -> deployment [label="deploys", color="#00ff00", penwidth=2, fontcolor="#00ff00"];
+    cluster_web -> deployment [label="runs on", color="#4a9eff", style=dashed, fontcolor="#4a9eff"];
+
+    // Utils usage
+    ui_prompt -> utils_prof [label="filters", color="#888888", fontcolor=white];
+    game_world -> utils_math [label="uses", color="#888888", fontcolor=white];
+}

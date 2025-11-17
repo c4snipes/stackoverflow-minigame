@@ -1,113 +1,306 @@
-# Ignore VS Code AI rules
-
-# Build
+# ==========================================
+# .NET / C# Build Artifacts
+# ==========================================
 bin/
 obj/
+*.dll
+*.exe
+*.pdb
+*.cache
+*.nupkg
+.fake
+*.suo
+*.user
+*.userprefs
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+*.binlog
+*.dylib
+*.dSYM
 
-# Visual Studio / Rider
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+web/scoreboard/__pycache__
+../web/scoreboard/__pycache__/
+web/scoreboard/venv/
+web/scoreboard/__pycache__/
+*.__pycache__.*
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ==========================================
+# IDE / Editor Files
+# ==========================================
+# Visual Studio
 .vs/
 *.suo
 *.user
 *.userosscache
 *.sln.docstates
+*.rsuser
+*.sln.iml
+
+# JetBrains Rider
 .idea/
-*.__pycache__
-tools/scoreboard/__pycache__
-.__pycache__/
-
-
-
+*.DotSettings.user
 
 # VS Code
 .vscode/
-
-# macOS
-.DS_Store
-# Thumbnails
-._*
-# Files that might appear on external disks
-.Spotlight-V100
-.Trashes
-# Icon must end with two \r
-.Icon\r\r
-# Files that might appear on network volumes
-.AppleDouble
-.LSOverride
-# Directories potentially created on remote AFP share
-.VolumeIcon.icns
-# Ignore .aitk instructions files used by tooling
-.aitk/instructions/tools.instructions.md
-.aitk/instructions/codacy.instructions.md
-# Ignore .github instructions file used by tooling
-.github/instructions/tools.instructions.md
-
-# Ignore github instructions file used by tooling
-.github/instructions/codacy.instructions.md
 .codebuddy
-.env
+*.code-workspace
 
-# SQLite database files
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+.netrwhist
+
+# Sublime Text
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+*.sublime-workspace
+*.sublime-project
+
+# Mono Auto Generated Files
+mono_crash.*
+
+# ==========================================
+# Python
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Python Virtual Environments
+venv/
+ENV/
+env/
+.venv
+
+# Python Type Checking & Linting
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+.ruff_cache/
+pylint-report.txt
+flake8-report.txt
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# ==========================================
+# Database Files
+# ==========================================
 *.db
 *.db-shm
 *.db-wal
 *.sqlite
 *.sqlite3
+scoreboard.jsonl
 
-# PDF documentation
-.project3_CSharp_Console_2025F.pdf
-*.log
-*.tmp
-*.bak
-*.old
-*.orig
-*.swp
-*~
-# NuGet packages
-*.nupkg
-# Windows image file caches
+# ==========================================
+# Operating Systems
+# ==========================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.VolumeIcon.icns
+Icon\r\r
+
+# Windows
 Thumbs.db
 ehthumbs.db
-# Folder config file
 Desktop.ini
-# Recycle Bin used on file shares
 $RECYCLE.BIN/
-# Windows Installer files
 *.cab
 *.msi
 *.msm
 *.msp
-# JetBrains Rider
-.idea/
-*.sln.iml
-# User-specific files
-*.rsuser
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
-# Mono Auto Generated Files
-mono_crash.*
-# Windows shortcuts
 *.lnk
 
-.trunk/
-*.trunk/
-# End of https://www.toptal.com/developers/gitignore/api/visualstudio,windows,macos,monodevelop,rider
-.fake
+# Linux
+*~
 
-launch-demo.command
-PRESENTATION-SETUP.md
-create-launcher-app.sh
-Launch Demo.app
+# ==========================================
+# Environment & Configuration
+# ==========================================
+.env
+.env.local
+.env.*.local
+*.local
+
+# ==========================================
+# Logs & Temporary Files
+# ==========================================
+*.log
+*.tmp
+*.temp
+*.bak
+*.old
+*.orig
+*.swp
+*.swo
+*~
+
+# ==========================================
+# Documentation & Reports
+# ==========================================
 CODE_QUALITY_REPORT.md
-
-# Security and refactoring reports
 REFACTORING_REPORT.md
 REFACTORING_COMPLETED.md
 SECURITY_CODE_QUALITY_AUDIT.md
 SECURITY_SCAN_RESULTS.md
+CODEBASE_RESTRUCTURE_PLAN.md
+PRESENTATION-SETUP.md
+project3_CSharp_Console_2025F.pdf
 bandit-report.txt
 safety-report.json
 mypy-report.txt
 
-CODEBASE_RESTRUCTURE_PLAN.md
+# ==========================================
+# Deployment & Tools
+# ==========================================
+.trunk/
+.aitk/instructions/
+
+# GitHub instructions
+.github/instructions/
+
+# Demo launcher files
+launch-demo.command
+create-launcher-app.sh
+Launch Demo.app/
+
+# ==========================================
+# Docker
+# ==========================================
+.dockerignore
+
+# ==========================================
+# Node.js / NPM (if used for tooling)
+# ==========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.npm
+.yarn-integrity
+
+# ==========================================
+# Package Managers
+# ==========================================
+packages/
+.nuget/
+paket-files/
+
+# ==========================================
+# Test Coverage & Reports
+# ==========================================
+coverage/
+*.coverage
+*.coveragexml
+TestResults/
+test-results/
+*.trx
+*.testsettings
+
+# ==========================================
+# Security & Secrets
+# ==========================================
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+credentials/
+.secrets/
+
+# ==========================================
+# Generated Documentation
+# ==========================================
+docs/_build/
+docs/.doctrees/
+site/
+_site/
+.jekyll-cache/
+
+# ==========================================
+# Backups & Archives
+# ==========================================
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+*.gz
+*.bz2
+
+# ==========================================
+# Project-Specific (Generated)
+# ==========================================
+PROJECT_STRUCTURE.md
+PROJECT_STRUCTURE_DIAGRAM.md
+PRESENTATION_SLIDES_UPDATED.md
+flowOfInformationConsoleGame.png
+
+web/scoreboard/__pycache__
+docs/DIAGRAM_INSTRUCTIONS.md
+
+
