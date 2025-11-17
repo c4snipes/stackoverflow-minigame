@@ -23,7 +23,7 @@ namespace stackoverflow_minigame
         public bool LevelAwardedThisFrame { get; private set; }
         public bool BorderHitThisFrame { get; private set; }
         public bool DoomfallActive { get; private set; }
-        private const float GroundHorizontalUnitsPerSecond = 15f;
+        private const float GroundHorizontalUnitsPerSecond = 18f; // Increased from 15f for easier horizontal control
         private const float AirHorizontalSpeedMultiplier = 1.3f;
         private const float FastDropImpulse = -6f;
         private const int MaxPlatformWidthDivisor = 3;

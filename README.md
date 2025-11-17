@@ -44,7 +44,7 @@ Don't want to install anything? Play directly in your browser:
 - **A/D** or **←/→**: Move left and right
 - **S** or **↓**: Drop down faster
 - **H**: Toggle the HUD display (Full → Compact → Hidden)
-- **L**: View the leaderboard
+- **L**: View the leaderboard (pause & view during gameplay or from main menu)
 - **Q** or **Esc**: Quit the game
 - **R**: Restart after falling
 
@@ -64,10 +64,10 @@ Don't want to install anything? Play directly in your browser:
 
 Every run you complete gets saved! See how you stack up against others:
 
-- **In-game:** Press **L** during gameplay or from the main menu
+- **In-game:** Press **L** anytime - during gameplay, from the main menu, or game over screen
 - **Online:** Visit [stackoverflow-minigame.fly.dev](https://stackoverflow-minigame.fly.dev/)
 
-Your scores are saved both locally (in `scoreboard.jsonl`) and online.
+Your scores are saved both locally (in `scoreboard.db`) and synced online automatically.
 
 ## 🎨 Tips & Tricks
 
@@ -84,18 +84,20 @@ Want to see what's happening under the hood?
 dotnet run -- trace
 ```
 
-### Leaderboard Only Mode
-Just want to check the scores?
+### Standalone Leaderboard Viewer
+Just want to check the scores without playing?
 ```bash
 STACKOVERFLOW_MINIGAME_MODE=leaderboard dotnet run
 ```
 
+Or just press **L** from the main menu - it's easier!
+
 ## 📊 For Developers
 
 ### How Scores Work
-- Scores are stored locally in `scoreboard.jsonl`
+- Scores are stored locally in `scoreboard.db` (SQLite database)
 - They're also synced to a remote leaderboard at `https://stackoverflow-minigame.fly.dev/`
-- The online leaderboard tracks top scores and fastest runs
+- The online leaderboard tracks top scores and fastest runs globally
 
 ### Environment Variables
 Want to customize things? Here are some options:
@@ -106,7 +108,7 @@ Want to customize things? Here are some options:
 - `STACKOVERFLOW_MINIGAME_MODE`: Set to "leaderboard" for viewer-only mode
 
 ### Hosting Your Own Leaderboard
-The game includes a Python webhook server in `tools/scoreboard/webhook.py` that:
+The game includes a Python webhook server in `web/scoreboard/webhook.py` that:
 - Receives score submissions
 - Stores them in a SQLite database
 - Serves a live web leaderboard

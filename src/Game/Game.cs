@@ -50,7 +50,7 @@ namespace stackoverflow_minigame
         private const float MinDeltaSeconds = 0.01f;
         private const float MaxDeltaSeconds = 0.1f;
         internal const float FrameTimeSeconds = TargetFrameMs / 1000f;
-        internal const float GravityPerSecond = -3.0f; // near zero-G feel for extended airtime
+        internal const float GravityPerSecond = -2.5f; // Reduced gravity for easier gameplay and more air control
         private const int MIN_PROGRESS_BAR_WIDTH = 10;
         private const int MAX_PROGRESS_BAR_WIDTH = 60;
         private const float HorizontalIntentMemorySeconds = 0.12f;
@@ -532,6 +532,12 @@ namespace stackoverflow_minigame
                         break;
                     case ConsoleKey.H:
                         CycleHudMode();
+                        break;
+                    case ConsoleKey.L:
+                        // Pause game and show leaderboard
+                        runStopwatch.Stop();
+                        ShowLeaderboard();
+                        runStopwatch.Start();
                         break;
                     case ConsoleKey.Q:
                     case ConsoleKey.Escape:

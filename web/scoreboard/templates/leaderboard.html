@@ -15,15 +15,15 @@
 
       body {
         font-family: 'VT323', monospace;
-        background: #0a0a0a;
-        color: #00ff41;
-        padding: 0;
+        background: #000;
+        color: #0f0;
         min-height: 100vh;
         position: relative;
         overflow-x: hidden;
+        line-height: 1.4;
       }
 
-      /* CRT Screen Effects */
+      /* Retro CRT scanlines - subtle */
       body::before {
         content: "";
         position: fixed;
@@ -33,506 +33,482 @@
         height: 100%;
         background: repeating-linear-gradient(
           0deg,
-          rgba(0, 0, 0, 0.15),
-          rgba(0, 0, 0, 0.15) 1px,
+          rgba(0, 0, 0, 0.1),
+          rgba(0, 0, 0, 0.1) 1px,
           transparent 1px,
           transparent 2px
         );
         pointer-events: none;
-        z-index: 1000;
-        animation: scanline 8s linear infinite;
-      }
-
-      @keyframes scanline {
-        0% {
-          transform: translateY(0);
-        }
-        100% {
-          transform: translateY(10px);
-        }
-      }
-
-      /* CRT Flicker */
-      body::after {
-        content: "";
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(18, 16, 16, 0.1);
-        opacity: 0;
-        pointer-events: none;
         z-index: 999;
-        animation: flicker 0.15s infinite;
       }
 
-      @keyframes flicker {
-        0% {
-          opacity: 0.27861;
-        }
-        5% {
-          opacity: 0.34769;
-        }
-        10% {
-          opacity: 0.23604;
-        }
-        15% {
-          opacity: 0.90626;
-        }
-        20% {
-          opacity: 0.18128;
-        }
-        25% {
-          opacity: 0.83891;
-        }
-        30% {
-          opacity: 0.65583;
-        }
-        35% {
-          opacity: 0.67807;
-        }
-        40% {
-          opacity: 0.26559;
-        }
-        45% {
-          opacity: 0.84693;
-        }
-        50% {
-          opacity: 0.96019;
-        }
-        55% {
-          opacity: 0.08594;
-        }
-        60% {
-          opacity: 0.20313;
-        }
-        65% {
-          opacity: 0.71988;
-        }
-        70% {
-          opacity: 0.53455;
-        }
-        75% {
-          opacity: 0.37288;
-        }
-        80% {
-          opacity: 0.71428;
-        }
-        85% {
-          opacity: 0.70419;
-        }
-        90% {
-          opacity: 0.7003;
-        }
-        95% {
-          opacity: 0.36108;
-        }
-        100% {
-          opacity: 0.24387;
-        }
+      .container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 20px;
       }
 
-      .terminal {
-        max-width: 1200px;
-        margin: 3rem auto;
-        padding: 2rem;
-        position: relative;
-        z-index: 1;
-      }
-
-      /* Terminal Border */
-      .screen-border {
-        border: 4px solid #00ff41;
-        border-radius: 0;
-        padding: 3rem 2.5rem;
-        background: rgba(0, 0, 0, 0.8);
+      /* Terminal window effect */
+      .terminal-window {
+        background: #0a0a0a;
+        border: 3px solid #0f0;
         box-shadow:
-          inset 0 0 50px rgba(0, 255, 65, 0.1),
-          0 0 20px rgba(0, 255, 65, 0.3),
-          0 0 40px rgba(0, 255, 65, 0.1);
-      }
-
-      .ascii-corners {
+          0 0 30px rgba(0, 255, 0, 0.4),
+          inset 0 0 100px rgba(0, 255, 0, 0.03);
+        margin: 20px 0;
         position: relative;
       }
 
+      /* Terminal title bar */
+      .terminal-header {
+        background: linear-gradient(180deg, #1a4d1a 0%, #0d260d 100%);
+        border-bottom: 2px solid #0f0;
+        padding: 8px 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .terminal-dots {
+        display: flex;
+        gap: 6px;
+      }
+
+      .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 1px solid #0f0;
+      }
+
+      .dot.red { background: #300; }
+      .dot.yellow { background: #330; }
+      .dot.green { background: #030; }
+
+      .terminal-title {
+        color: #0f0;
+        font-size: 1.1rem;
+        margin-left: 10px;
+        text-shadow: 0 0 5px #0f0;
+      }
+
+      .terminal-content {
+        padding: 25px;
+      }
+
+      /* Header styling */
       header {
-        text-align: center;
-        margin-bottom: 3rem;
-        text-transform: uppercase;
+        margin-bottom: 25px;
       }
 
-      .title-art {
-        font-size: clamp(1.4rem, 3.5vw, 2.2rem);
-        font-weight: normal;
-        line-height: 1.5;
-        color: #00ff41;
-        text-shadow:
-          0 0 10px #00ff41,
-          0 0 20px #00ff41,
-          0 0 30px #00ff41;
-        animation: glow 2s ease-in-out infinite alternate;
-        letter-spacing: 0.05em;
-        margin-bottom: 1.5rem;
+      .prompt-line {
+        color: #0d0;
+        font-size: 1.05rem;
+        margin-bottom: 15px;
       }
 
-      @keyframes glow {
-        from {
-          text-shadow:
-            0 0 5px #00ff41,
-            0 0 10px #00ff41,
-            0 0 15px #00ff41;
-        }
-        to {
-          text-shadow:
-            0 0 10px #00ff41,
-            0 0 20px #00ff41,
-            0 0 30px #00ff41,
-            0 0 40px #00ff41;
-        }
+      .prompt-char {
+        color: #0f0;
+        text-shadow: 0 0 8px #0f0;
+      }
+
+      .ascii-title {
+        font-size: clamp(1.3rem, 2.8vw, 2rem);
+        color: #0f0;
+        text-shadow: 0 0 15px #0f0, 0 0 25px #0f0;
+        margin-bottom: 10px;
+        line-height: 1.3;
+        letter-spacing: 0.02em;
       }
 
       .subtitle {
-        color: #00dd00;
-        font-size: clamp(1rem, 2vw, 1.3rem);
-        margin-bottom: 0.5rem;
-        margin-top: 1rem;
+        color: #0d0;
+        font-size: clamp(0.95rem, 1.8vw, 1.15rem);
+        margin-top: 10px;
       }
 
-      .blink {
+      .cursor-blink {
         animation: blink 1s step-start infinite;
       }
 
       @keyframes blink {
-        50% {
-          opacity: 0;
-        }
+        50% { opacity: 0; }
       }
 
-      .section-divider {
-        margin: 3.5rem 0 2rem 0;
-        text-align: center;
-        color: #00ff41;
-        font-size: 1.2rem;
-      }
-
-      .section-title {
-        display: inline-block;
-        background: #0a0a0a;
-        padding: 0 1rem;
-        position: relative;
-        font-size: clamp(1.3rem, 2.5vw, 1.8rem);
-        text-shadow: 0 0 10px #00ff41;
-        letter-spacing: 0.05em;
-      }
-
-      .section-divider::before {
-        content: "═══════════════════════════════════════════════════════════════════════════════";
-        position: absolute;
-        left: 0;
-        right: 0;
-        top: 50%;
-        transform: translateY(-50%);
-        z-index: -1;
-        overflow: hidden;
-        white-space: nowrap;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 2rem 0;
-        font-size: clamp(1rem, 2vw, 1.25rem);
-        background: rgba(0, 20, 0, 0.5);
-      }
-
-      thead {
-        border-bottom: 2px solid #00ff41;
-      }
-
-      th {
-        padding: 1rem 0.8rem;
-        text-align: left;
-        color: #00ff41;
-        text-transform: uppercase;
-        letter-spacing: 0.15em;
-        font-weight: normal;
-        border-bottom: 2px solid #00ff41;
-        text-shadow: 0 0 5px #00ff41;
-      }
-
-      td {
-        padding: 0.8rem 0.8rem;
-        border-bottom: 1px solid #003300;
-        color: #00dd00;
-      }
-
-      tbody tr {
-        transition: all 0.1s ease;
-      }
-
-      tbody tr:hover {
-        background: rgba(0, 255, 65, 0.1);
-        box-shadow: inset 0 0 10px rgba(0, 255, 65, 0.2);
-      }
-
-      /* Rank styling */
-      tbody tr:nth-child(1) td:first-child {
-        color: #ffff00;
-        text-shadow: 0 0 10px #ffff00;
-      }
-
-      tbody tr:nth-child(1) td:first-child::before {
-        content: ">>> ";
-      }
-
-      tbody tr:nth-child(2) td:first-child {
-        color: #00ffff;
-        text-shadow: 0 0 10px #00ffff;
-      }
-
-      tbody tr:nth-child(2) td:first-child::before {
-        content: ">>  ";
-      }
-
-      tbody tr:nth-child(3) td:first-child {
-        color: #ff8800;
-        text-shadow: 0 0 10px #ff8800;
-      }
-
-      tbody tr:nth-child(3) td:first-child::before {
-        content: ">   ";
-      }
-
-      tbody tr:nth-child(n+4) td:first-child::before {
-        content: "    ";
-      }
-
-      /* Empty state */
-      .empty-state {
-        text-align: center;
-        padding: 3rem 1rem;
-        color: #00aa00;
-        font-size: 1.3rem;
-      }
-
-      .empty-state::before {
-        content: "[ NO DATA RECORDED ]";
-        display: block;
-        font-size: 1.8rem;
-        margin-bottom: 1rem;
-        color: #00ff41;
-        animation: blink 2s step-start infinite;
-      }
-
-      footer {
-        text-align: center;
-        margin-top: 3.5rem;
-        padding: 1.5rem 1rem 0.5rem 1rem;
-        color: #00aa00;
-        font-size: 1.15rem;
-        border-top: 1px solid #003300;
-      }
-
-      footer a {
-        color: #00ff41;
-        text-decoration: none;
-        text-shadow: 0 0 5px #00ff41;
-      }
-
-      footer a:hover {
-        text-decoration: underline;
-        text-shadow: 0 0 10px #00ff41;
-      }
-
-      .prompt {
-        color: #00ff41;
-      }
-
-      /* Responsive */
-      @media (max-width: 768px) {
-        .terminal {
-          margin: 1rem;
-          padding: 0.5rem;
-        }
-
-        .screen-border {
-          padding: 1.5rem 1rem;
-        }
-
-        .title-art {
-          font-size: 1.2rem;
-          line-height: 1.4;
-        }
-
-        .section-title {
-          font-size: 1.2rem;
-          padding: 0 0.8rem;
-        }
-
-        th, td {
-          padding: 0.6rem 0.4rem;
-          font-size: 0.95rem;
-        }
-
-        th:nth-child(3), td:nth-child(3),
-        th:nth-child(4), td:nth-child(4) {
-          display: none;
-        }
-
-        footer {
-          font-size: 1rem;
-        }
-      }
-
-      @media (max-width: 480px) {
-        .screen-border {
-          padding: 1rem 0.8rem;
-        }
-
-        .title-art {
-          font-size: 1rem;
-        }
-
-        .section-title {
-          font-size: 1rem;
-        }
-
-        table {
-          font-size: 0.9rem;
-        }
-      }
-
-      /* Loading animation */
-      @keyframes typing {
-        from {
-          width: 0;
-        }
-      }
-
-      .system-info {
-        color: #00aa00;
-        font-size: 1.05rem;
-        margin-bottom: 1.5rem;
-        opacity: 0.8;
-      }
-
+      /* Status bar */
       .status-bar {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.8rem 1rem;
-        background: rgba(0, 40, 0, 0.3);
-        border: 1px solid #003300;
-        margin-bottom: 1.5rem;
-        font-size: 1rem;
+        padding: 10px 15px;
+        background: rgba(0, 50, 0, 0.3);
+        border: 1px solid #040;
+        margin-bottom: 20px;
         flex-wrap: wrap;
-        gap: 0.5rem;
+        gap: 10px;
       }
 
       .status-item {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: 8px;
+        font-size: 1rem;
       }
 
-      .status-indicator {
-        display: inline-block;
+      .pulse-dot {
         width: 8px;
         height: 8px;
-        background: #00ff41;
+        background: #0f0;
         border-radius: 50%;
+        box-shadow: 0 0 8px #0f0;
         animation: pulse 2s ease-in-out infinite;
       }
 
       @keyframes pulse {
-        0%, 100% {
-          opacity: 1;
-          box-shadow: 0 0 5px #00ff41;
-        }
-        50% {
-          opacity: 0.5;
-          box-shadow: 0 0 2px #00ff41;
-        }
+        0%, 100% { opacity: 1; box-shadow: 0 0 8px #0f0; }
+        50% { opacity: 0.4; box-shadow: 0 0 3px #0f0; }
       }
 
-      .refresh-btn {
+      .btn {
         background: transparent;
-        border: 1px solid #00ff41;
-        color: #00ff41;
-        padding: 0.4rem 1rem;
+        border: 2px solid #0f0;
+        color: #0f0;
+        padding: 6px 15px;
         font-family: 'VT323', monospace;
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         cursor: pointer;
         transition: all 0.2s;
         text-transform: uppercase;
+      }
+
+      .btn:hover {
+        background: rgba(0, 255, 0, 0.15);
+        box-shadow: 0 0 12px rgba(0, 255, 0, 0.4);
+        transform: translateY(-1px);
+      }
+
+      .btn:active {
+        transform: translateY(0);
+      }
+
+      /* Search & Filter */
+      .controls-row {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+
+      .search-box {
+        flex: 1;
+        min-width: 250px;
+        background: rgba(0, 40, 0, 0.3);
+        border: 2px solid #0f0;
+        color: #0f0;
+        padding: 8px 12px;
+        font-family: 'VT323', monospace;
+        font-size: 1.05rem;
+        outline: none;
+        transition: all 0.2s;
+      }
+
+      .search-box::placeholder {
+        color: #070;
+      }
+
+      .search-box:focus {
+        background: rgba(0, 60, 0, 0.4);
+        box-shadow: 0 0 12px rgba(0, 255, 0, 0.3);
+      }
+
+      .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(0, 40, 0, 0.3);
+        border: 1px solid #040;
+        padding: 8px 12px;
+      }
+
+      .filter-label {
+        color: #0f0;
+        font-size: 1.05rem;
+        white-space: nowrap;
+      }
+
+      .filter-select {
+        background: rgba(0, 60, 0, 0.5);
+        border: 2px solid #0f0;
+        color: #0f0;
+        padding: 6px 12px;
+        font-family: 'VT323', monospace;
+        font-size: 1.05rem;
+        cursor: pointer;
+        outline: none;
+      }
+
+      .filter-select option {
+        background: #000;
+      }
+
+      /* Stats Dashboard */
+      .stats-panel {
+        margin: 25px 0;
+        padding: 20px;
+        background: rgba(0, 40, 0, 0.2);
+        border: 2px solid #0f0;
+        box-shadow: inset 0 0 30px rgba(0, 255, 0, 0.05);
+      }
+
+      .stats-heading {
+        text-align: center;
+        color: #0f0;
+        font-size: 1.4rem;
+        margin-bottom: 20px;
+        text-shadow: 0 0 10px #0f0;
         letter-spacing: 0.1em;
       }
 
-      .refresh-btn:hover {
-        background: rgba(0, 255, 65, 0.1);
-        box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 15px;
       }
 
-      .refresh-btn:active {
-        transform: scale(0.95);
+      .stat-box {
+        background: rgba(0, 30, 0, 0.4);
+        border: 1px solid #040;
+        padding: 15px;
+        text-align: center;
+        transition: all 0.2s;
       }
 
-      .fade-in {
-        animation: fadeIn 0.5s ease-in;
+      .stat-box:hover {
+        background: rgba(0, 50, 0, 0.5);
+        border-color: #0f0;
+        box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);
       }
 
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(-10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+      .stat-label {
+        color: #0a0;
+        font-size: 0.95rem;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
       }
 
-      @media (max-width: 768px) {
-        .status-bar {
-          font-size: 0.9rem;
-          padding: 0.6rem 0.8rem;
-        }
-
-        .refresh-btn {
-          font-size: 1rem;
-          padding: 0.3rem 0.8rem;
-        }
+      .stat-number {
+        color: #0f0;
+        font-size: 1.7rem;
+        text-shadow: 0 0 8px #0f0;
+        font-weight: bold;
       }
 
-      /* Loading Spinner */
-      .loading-overlay {
+      /* Section dividers */
+      .section-break {
+        margin: 30px 0 20px 0;
+        text-align: center;
+        position: relative;
+      }
+
+      .section-label {
+        display: inline-block;
+        background: #0a0a0a;
+        padding: 0 15px;
+        color: #0f0;
+        font-size: 1.3rem;
+        text-shadow: 0 0 10px #0f0;
+        letter-spacing: 0.08em;
+        position: relative;
+        z-index: 1;
+      }
+
+      .section-break::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 1px;
+        background: linear-gradient(90deg,
+          transparent,
+          #0f0 20%,
+          #0f0 80%,
+          transparent
+        );
+        box-shadow: 0 0 5px #0f0;
+      }
+
+      /* Tables */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+        font-size: 1.15rem;
+      }
+
+      thead {
+        border-bottom: 2px solid #0f0;
+      }
+
+      th {
+        padding: 12px 10px;
+        text-align: left;
+        color: #0f0;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-weight: normal;
+        text-shadow: 0 0 5px #0f0;
+      }
+
+      td {
+        padding: 10px 10px;
+        border-bottom: 1px solid #040;
+        color: #0d0;
+      }
+
+      tbody tr {
+        transition: all 0.15s;
+      }
+
+      tbody tr:hover {
+        background: rgba(0, 255, 0, 0.08);
+      }
+
+      tbody tr.hidden {
+        display: none;
+      }
+
+      /* Top 3 ranks styling */
+      tbody tr:nth-child(1) td:first-child {
+        color: #ff0;
+        text-shadow: 0 0 10px #ff0;
+        font-size: 1.25rem;
+      }
+
+      tbody tr:nth-child(1) td:first-child::before {
+        content: "👑 ";
+      }
+
+      tbody tr:nth-child(2) td:first-child {
+        color: #0ff;
+        text-shadow: 0 0 10px #0ff;
+      }
+
+      tbody tr:nth-child(2) td:first-child::before {
+        content: "🥈 ";
+      }
+
+      tbody tr:nth-child(3) td:first-child {
+        color: #f80;
+        text-shadow: 0 0 10px #f80;
+      }
+
+      tbody tr:nth-child(3) td:first-child::before {
+        content: "🥉 ";
+      }
+
+      /* Empty state */
+      .empty-message {
+        text-align: center;
+        padding: 40px 20px;
+        color: #0a0;
+        font-size: 1.2rem;
+      }
+
+      .empty-message::before {
+        content: "[ NO RECORDS FOUND ]";
+        display: block;
+        font-size: 1.6rem;
+        margin-bottom: 15px;
+        color: #0f0;
+        animation: blink 2s step-start infinite;
+      }
+
+      /* QR Code section */
+      .qr-section {
+        text-align: center;
+        margin-top: 30px;
+        padding: 25px 15px;
+        border-top: 1px solid #040;
+      }
+
+      .qr-heading {
+        color: #0f0;
+        font-size: 1.25rem;
+        margin-bottom: 15px;
+        text-shadow: 0 0 8px #0f0;
+      }
+
+      .qr-wrapper {
+        display: inline-block;
+        padding: 12px;
+        background: #fff;
+        border-radius: 6px;
+        box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+      }
+
+      .qr-wrapper img {
+        display: block;
+        width: 180px;
+        height: 180px;
+      }
+
+      .qr-text {
+        color: #0a0;
+        font-size: 1rem;
+        margin-top: 12px;
+      }
+
+      /* Footer */
+      footer {
+        text-align: center;
+        margin-top: 30px;
+        padding-top: 20px;
+        color: #0a0;
+        font-size: 1.1rem;
+        border-top: 1px solid #040;
+      }
+
+      footer a {
+        color: #0f0;
+        text-decoration: none;
+        text-shadow: 0 0 5px #0f0;
+        transition: all 0.2s;
+      }
+
+      footer a:hover {
+        text-decoration: underline;
+        text-shadow: 0 0 10px #0f0;
+      }
+
+      /* Loading overlay */
+      .loading-screen {
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0, 0, 0, 0.7);
+        background: rgba(0, 0, 0, 0.85);
         display: flex;
         justify-content: center;
         align-items: center;
-        z-index: 2000;
+        z-index: 9999;
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.3s;
       }
 
-      .loading-overlay.active {
+      .loading-screen.active {
         opacity: 1;
         pointer-events: all;
       }
 
-      .spinner {
+      .spinner-ring {
         width: 60px;
         height: 60px;
-        border: 4px solid rgba(0, 255, 65, 0.2);
-        border-top: 4px solid #00ff41;
+        border: 4px solid rgba(0, 255, 0, 0.2);
+        border-top: 4px solid #0f0;
         border-radius: 50%;
         animation: spin 1s linear infinite;
       }
@@ -542,346 +518,206 @@
         100% { transform: rotate(360deg); }
       }
 
-      .loading-text {
-        color: #00ff41;
-        font-size: 1.5rem;
-        margin-top: 1rem;
-        text-shadow: 0 0 10px #00ff41;
-        animation: blink 1.5s ease-in-out infinite;
+      .loading-label {
+        color: #0f0;
+        font-size: 1.4rem;
+        margin-top: 15px;
+        text-shadow: 0 0 10px #0f0;
       }
 
-      /* Search & Filter */
-      .search-container {
-        margin: 2rem 0;
-        display: flex;
-        gap: 1rem;
-        align-items: center;
-        flex-wrap: wrap;
-      }
-
-      .search-input {
-        flex: 1;
-        min-width: 200px;
-        background: rgba(0, 40, 0, 0.3);
-        border: 1px solid #00ff41;
-        color: #00ff41;
-        padding: 0.6rem 1rem;
-        font-family: 'VT323', monospace;
-        font-size: 1.1rem;
-        outline: none;
-        transition: all 0.2s;
-      }
-
-      .search-input::placeholder {
-        color: #00aa00;
-        opacity: 0.7;
-      }
-
-      .search-input:focus {
-        background: rgba(0, 60, 0, 0.5);
-        box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
-      }
-
-      .clear-btn {
-        background: transparent;
-        border: 1px solid #00ff41;
-        color: #00ff41;
-        padding: 0.6rem 1rem;
-        font-family: 'VT323', monospace;
-        font-size: 1.1rem;
-        cursor: pointer;
-        transition: all 0.2s;
-        text-transform: uppercase;
-      }
-
-      .clear-btn:hover {
-        background: rgba(0, 255, 65, 0.1);
-      }
-
-      .no-results {
-        text-align: center;
-        padding: 2rem;
-        color: #00aa00;
-        font-size: 1.2rem;
-      }
-
-      tbody tr.hidden {
-        display: none;
-      }
-
-      /* Time Filter */
-      .time-filter-container {
-        margin: 1.5rem 0;
-        display: flex;
-        gap: 1rem;
-        align-items: center;
-        padding: 0.8rem 1rem;
-        background: rgba(0, 40, 0, 0.3);
-        border: 1px solid #003300;
-      }
-
-      .time-filter-container label {
-        color: #00ff41;
-        font-size: 1.1rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-      }
-
-      .time-filter-select {
-        background: rgba(0, 60, 0, 0.5);
-        border: 1px solid #00ff41;
-        color: #00ff41;
-        padding: 0.5rem 1rem;
-        font-family: 'VT323', monospace;
-        font-size: 1.1rem;
-        cursor: pointer;
-        outline: none;
-        transition: all 0.2s;
-      }
-
-      .time-filter-select:hover {
-        background: rgba(0, 80, 0, 0.7);
-        box-shadow: 0 0 10px rgba(0, 255, 65, 0.3);
-      }
-
-      .time-filter-select option {
-        background: #0a0a0a;
-        color: #00ff41;
-      }
-
-      /* Stats Dashboard */
-      .stats-dashboard {
-        margin: 2rem 0;
-        padding: 1.5rem;
-        background: rgba(0, 40, 0, 0.3);
-        border: 2px solid #00ff41;
-        box-shadow: inset 0 0 20px rgba(0, 255, 65, 0.1);
-      }
-
-      .stats-title {
-        text-align: center;
-        color: #00ff41;
-        font-size: 1.5rem;
-        margin-bottom: 1.5rem;
-        text-shadow: 0 0 10px #00ff41;
-        letter-spacing: 0.15em;
-      }
-
-      .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 1rem;
-      }
-
-      .stat-card {
-        background: rgba(0, 20, 0, 0.5);
-        border: 1px solid #003300;
-        padding: 1rem;
-        text-align: center;
-        transition: all 0.2s;
-      }
-
-      .stat-card:hover {
-        background: rgba(0, 40, 0, 0.7);
-        border-color: #00ff41;
-        box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
-      }
-
-      .stat-label {
-        color: #00aa00;
-        font-size: 0.9rem;
-        margin-bottom: 0.5rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-      }
-
-      .stat-value {
-        color: #00ff41;
-        font-size: 1.8rem;
-        font-weight: bold;
-        text-shadow: 0 0 5px #00ff41;
-      }
-
+      /* Responsive Design */
       @media (max-width: 768px) {
-        .time-filter-container {
-          flex-direction: column;
-          align-items: flex-start;
+        .container {
+          padding: 10px;
+        }
+
+        .terminal-window {
+          margin: 10px 0;
+        }
+
+        .terminal-content {
+          padding: 15px;
+        }
+
+        .ascii-title {
+          font-size: 1.2rem;
         }
 
         .stats-grid {
           grid-template-columns: repeat(2, 1fr);
         }
 
-        .stat-value {
+        .stat-number {
           font-size: 1.4rem;
+        }
+
+        th, td {
+          padding: 8px 6px;
+          font-size: 1rem;
+        }
+
+        /* Hide some columns on mobile */
+        th:nth-child(3), td:nth-child(3),
+        th:nth-child(4), td:nth-child(4) {
+          display: none;
+        }
+
+        .controls-row {
+          flex-direction: column;
+        }
+
+        .search-box {
+          width: 100%;
+        }
+
+        .qr-wrapper img {
+          width: 140px;
+          height: 140px;
         }
       }
 
       @media (max-width: 480px) {
+        .terminal-content {
+          padding: 10px;
+        }
+
+        .ascii-title {
+          font-size: 1rem;
+        }
+
         .stats-grid {
           grid-template-columns: 1fr;
         }
-      }
 
-      /* QR Code Section */
-      .qr-section {
-        text-align: center;
-        margin-top: 2rem;
-        padding: 2rem 1rem;
-        border-top: 1px solid #003300;
-      }
-
-      .qr-title {
-        color: #00ff41;
-        font-size: 1.3rem;
-        margin-bottom: 1rem;
-        text-shadow: 0 0 5px #00ff41;
-      }
-
-      .qr-code {
-        display: inline-block;
-        padding: 1rem;
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
-      }
-
-      .qr-code img {
-        display: block;
-        width: 200px;
-        height: 200px;
-      }
-
-      .qr-caption {
-        color: #00aa00;
-        font-size: 1rem;
-        margin-top: 1rem;
-      }
-
-      @media (max-width: 768px) {
-        /* .search-container {
-          flex-direction: column;
+        table {
+          font-size: 0.95rem;
         }
+      }
 
-        .search-input {
-          width: 100%;
-        } */
+      /* Fade-in animation */
+      .fade-in {
+        animation: fadeIn 0.4s ease-in;
+      }
 
-        .search-container {
-          flex-direction: column;
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-8px);
         }
-
-        .search-input {
-          width: 100%;
-        }
-
-        .qr-code img {
-          width: 150px;
-          height: 150px;
+        to {
+          opacity: 1;
+          transform: translateY(0);
         }
       }
     </style>
   </head>
   <body>
-    <div class="terminal">
-      <div class="screen-border">
-        <div class="ascii-corners">
+    <div class="container">
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <div class="dot red"></div>
+            <div class="dot yellow"></div>
+            <div class="dot green"></div>
+          </div>
+          <div class="terminal-title">stackoverflow-leaderboard.db</div>
+        </div>
+
+        <div class="terminal-content">
           <header>
-            <div class="system-info">
-              <span class="prompt">root@flyio:~$</span> cat /data/scoreboard.db
+            <div class="prompt-line">
+              <span class="prompt-char">root@flyio</span>:<span class="prompt-char">~</span>$ sqlite3 scoreboard.db "SELECT * FROM scoreboard ORDER BY level DESC;"
             </div>
-            <h1 class="title-art">
-              ╔═══════════════════════════════════════════╗<br>
-              ║&nbsp;&nbsp;STACKOVERFLOW SKYSCRAPER&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;║<br>
-              ║&nbsp;&nbsp;=== LEADERBOARD TERMINAL ===&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;║<br>
-              ╚═══════════════════════════════════════════╝
-            </h1>
+            <div class="ascii-title">
+              ╔══════════════════════════════════════════╗<br>
+              ║  STACKOVERFLOW SKYSCRAPER LEADERBOARD   ║<br>
+              ╚══════════════════════════════════════════╝
+            </div>
             <p class="subtitle">
-              REMOTE FEED: FLY.IO → POST TO /scoreboard <span class="blink">▮</span>
+              REALTIME FEED: FLY.IO DEPLOYMENT <span class="cursor-blink">▮</span>
             </p>
           </header>
 
           <div class="status-bar">
             <div class="status-item">
-              <span class="status-indicator"></span>
+              <span class="pulse-dot"></span>
               <span>LIVE</span>
-              <span id="last-update">Last updated: Just now</span>
+              <span id="last-update">Updated just now</span>
             </div>
-            <button class="refresh-btn" onclick="refreshLeaderboard()">↻ REFRESH</button>
+            <button class="btn" onclick="refreshLeaderboard()">↻ REFRESH</button>
           </div>
 
-          <div class="search-container">
+          <div class="controls-row">
             <input
               type="text"
               id="search-input"
-              class="search-input"
-              placeholder="Search by initials (e.g., ACE, MVP...)..."
+              class="search-box"
+              placeholder="🔍 Search by initials..."
               oninput="filterTables()"
             />
-            <button class="clear-btn" onclick="clearSearch()">✕ CLEAR</button>
+            <div class="filter-group">
+              <label class="filter-label" for="time-filter">TIME RANGE:</label>
+              <select id="time-filter" class="filter-select" onchange="changeTimeFilter()">
+                <option value="">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+              </select>
+            </div>
+            <button class="btn" onclick="clearSearch()">✕ CLEAR</button>
           </div>
 
-          <div class="time-filter-container">
-            <label for="time-filter">Time Range:</label>
-            <select id="time-filter" class="time-filter-select" onchange="changeTimeFilter()">
-              <option value="">All Time</option>
-              <option value="today">Today</option>
-              <option value="week">This Week</option>
-              <option value="month">This Month</option>
-            </select>
-          </div>
-
-          <div class="stats-dashboard" id="stats-dashboard">
-            <div class="stats-title">[ GLOBAL STATISTICS ]</div>
+          <div class="stats-panel">
+            <div class="stats-heading">[ GLOBAL STATISTICS ]</div>
             <div class="stats-grid">
-              <div class="stat-card">
+              <div class="stat-box">
                 <div class="stat-label">Total Players</div>
-                <div class="stat-value" id="stat-total-players">-</div>
+                <div class="stat-number" id="stat-total-players">-</div>
               </div>
-              <div class="stat-card">
+              <div class="stat-box">
                 <div class="stat-label">Total Runs</div>
-                <div class="stat-value" id="stat-total-runs">-</div>
+                <div class="stat-number" id="stat-total-runs">-</div>
               </div>
-              <div class="stat-card">
-                <div class="stat-label">Average Level</div>
-                <div class="stat-value" id="stat-avg-level">-</div>
+              <div class="stat-box">
+                <div class="stat-label">Avg Level</div>
+                <div class="stat-number" id="stat-avg-level">-</div>
               </div>
-              <div class="stat-card">
+              <div class="stat-box">
                 <div class="stat-label">Record Level</div>
-                <div class="stat-value" id="stat-highest-level">-</div>
+                <div class="stat-number" id="stat-highest-level">-</div>
               </div>
-              <div class="stat-card">
+              <div class="stat-box">
                 <div class="stat-label">Fastest Time</div>
-                <div class="stat-value" id="stat-fastest-time">-</div>
+                <div class="stat-number" id="stat-fastest-time">-</div>
               </div>
-              <div class="stat-card">
-                <div class="stat-label">🏆 Top Player</div>
-                <div class="stat-value" id="stat-top-player">-</div>
+              <div class="stat-box">
+                <div class="stat-label">👑 Top Player</div>
+                <div class="stat-number" id="stat-top-player">-</div>
               </div>
             </div>
           </div>
 
-          <div class="section-divider">
-            <span class="section-title">[ &nbsp;TOP LEVELS&nbsp; ]</span>
+          <div class="section-break">
+            <span class="section-label">▸ TOP LEVELS</span>
           </div>
           {{TOP_LEVELS}}
 
-          <div class="section-divider">
-            <span class="section-title">[ &nbsp;FASTEST RUNS&nbsp; ]</span>
+          <div class="section-break">
+            <span class="section-label">▸ FASTEST RUNS</span>
           </div>
           {{FASTEST_RUNS}}
 
           <div class="qr-section">
-            <div class="qr-title">[ SCAN TO VIEW REPO ]</div>
-            <div class="qr-code">
-              <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://github.com/c4snipes/stackoverflow-minigame" alt="QR Code to GitHub Repo" />
+            <div class="qr-heading">[ SCAN FOR SOURCE CODE ]</div>
+            <div class="qr-wrapper">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://github.com/c4snipes/stackoverflow-minigame" alt="QR Code" />
             </div>
-            <div class="qr-caption">Scan with your phone to visit the repository</div>
+            <div class="qr-text">github.com/c4snipes/stackoverflow-minigame</div>
           </div>
 
           <footer>
             <p>
-              <span class="prompt">></span> SOURCE:
+              <span class="prompt-char">&gt;</span> SOURCE:
               <a href="https://github.com/c4snipes/stackoverflow-minigame">github.com/c4snipes/stackoverflow-minigame</a>
             </p>
           </footer>
@@ -889,10 +725,10 @@
       </div>
     </div>
 
-    <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-screen" id="loading-overlay">
       <div style="text-align: center;">
-        <div class="spinner"></div>
-        <div class="loading-text">LOADING...</div>
+        <div class="spinner-ring"></div>
+        <div class="loading-label">LOADING...</div>
       </div>
     </div>
 
@@ -900,34 +736,27 @@
       let autoRefreshInterval;
       const AUTO_REFRESH_SECONDS = 30;
 
-      // Format time ago
       function timeAgo(timestamp) {
         const seconds = Math.floor((Date.now() - timestamp) / 1000);
-
-        if (seconds < 10) return 'Just now';
-        if (seconds < 60) return `${seconds} seconds ago`;
-
+        if (seconds < 10) return 'just now';
+        if (seconds < 60) return `${seconds}s ago`;
         const minutes = Math.floor(seconds / 60);
-        if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-
+        if (minutes < 60) return `${minutes}m ago`;
         const hours = Math.floor(minutes / 60);
-        if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-
+        if (hours < 24) return `${hours}h ago`;
         const days = Math.floor(hours / 24);
-        return `${days} day${days > 1 ? 's' : ''} ago`;
+        return `${days}d ago`;
       }
 
-      // Update timestamp display
       function updateTimestamp() {
         const lastUpdate = localStorage.getItem('lastLeaderboardUpdate');
         const timestamp = lastUpdate ? parseInt(lastUpdate) : Date.now();
         const element = document.getElementById('last-update');
         if (element) {
-          element.textContent = `Last updated: ${timeAgo(timestamp)}`;
+          element.textContent = `Updated ${timeAgo(timestamp)}`;
         }
       }
 
-      // Show/hide loading spinner
       function showLoading() {
         document.getElementById('loading-overlay').classList.add('active');
       }
@@ -936,7 +765,6 @@
         document.getElementById('loading-overlay').classList.remove('active');
       }
 
-      // Refresh leaderboard data with optional time filter
       async function refreshLeaderboard(since = null) {
         showLoading();
         try {
@@ -946,7 +774,6 @@
 
           const data = await response.json();
 
-          // Update top levels table
           updateTable('top-levels-body', data.topLevels, (entry, rank) => `
             <tr class="fade-in">
               <td>${rank}</td>
@@ -956,7 +783,6 @@
             </tr>
           `);
 
-          // Update fastest runs table
           updateTable('fastest-runs-body', data.fastestRuns, (entry, rank) => `
             <tr class="fade-in">
               <td>${rank}</td>
@@ -966,16 +792,13 @@
             </tr>
           `);
 
-          // Update global stats
           if (data.stats) {
             updateStats(data.stats);
           }
 
-          // Update timestamp
           localStorage.setItem('lastLeaderboardUpdate', Date.now().toString());
           updateTimestamp();
 
-          // Reapply search filter if active
           const searchInput = document.getElementById('search-input');
           if (searchInput && searchInput.value.trim()) {
             filterTables();
@@ -988,7 +811,6 @@
         }
       }
 
-      // Update stats dashboard
       function updateStats(stats) {
         document.getElementById('stat-total-players').textContent = stats.totalPlayers || 0;
         document.getElementById('stat-total-runs').textContent = stats.totalRuns || 0;
@@ -999,14 +821,12 @@
         document.getElementById('stat-top-player').textContent = stats.topPlayer || 'N/A';
       }
 
-      // Handle time filter change
       function changeTimeFilter() {
         const select = document.getElementById('time-filter');
         const since = select.value;
         refreshLeaderboard(since || null);
       }
 
-      // Format duration from ticks
       function formatDuration(ticks) {
         try {
           const totalSeconds = parseFloat(ticks) / 10_000_000;
@@ -1018,15 +838,12 @@
         }
       }
 
-      // Update table helper
       function updateTable(tableId, data, rowTemplate) {
         const tbody = document.getElementById(tableId);
         if (!tbody || !data || data.length === 0) return;
-
         tbody.innerHTML = data.map((entry, index) => rowTemplate(entry, index + 1)).join('');
       }
 
-      // SEARCH AND FILTER FUNCTIONALITY
       function filterTables() {
         const searchTerm = document.getElementById('search-input').value.trim().toUpperCase();
         filterTable('top-levels-body', searchTerm);
@@ -1075,45 +892,27 @@
         }
       }
 
-      // Page visibility detection to pause auto-refresh
       function handleVisibilityChange() {
         if (document.hidden) {
-          // Page is hidden - pause auto-refresh
           if (autoRefreshInterval) {
             clearInterval(autoRefreshInterval);
             autoRefreshInterval = null;
-            console.log('[Leaderboard] Auto-refresh paused (page hidden)');
           }
         } else {
-          // Page is visible - resume auto-refresh
           if (!autoRefreshInterval) {
             autoRefreshInterval = setInterval(refreshLeaderboard, AUTO_REFRESH_SECONDS * 1000);
-            console.log('[Leaderboard] Auto-refresh resumed (page visible)');
-            // Refresh immediately when page becomes visible
             refreshLeaderboard();
           }
         }
       }
 
-      // Initialize
       document.addEventListener('DOMContentLoaded', () => {
-        // Set initial timestamp
         localStorage.setItem('lastLeaderboardUpdate', Date.now().toString());
-
-        // Update timestamp display every second
         setInterval(updateTimestamp, 1000);
-
-        // Auto-refresh every 30 seconds
         autoRefreshInterval = setInterval(refreshLeaderboard, AUTO_REFRESH_SECONDS * 1000);
-
-        // Listen for page visibility changes
         document.addEventListener('visibilitychange', handleVisibilityChange);
-
-        console.log(`[Leaderboard] Auto-refresh enabled (every ${AUTO_REFRESH_SECONDS}s)`);
-        console.log('[Leaderboard] Page visibility detection enabled (saves bandwidth when hidden)');
       });
 
-      // Cleanup on page unload
       window.addEventListener('beforeunload', () => {
         if (autoRefreshInterval) {
           clearInterval(autoRefreshInterval);

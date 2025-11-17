@@ -5,7 +5,6 @@ namespace stackoverflow_minigame
 {
     internal class Program
     {
-        private const string LeaderboardArg = "leaderboard";
         private const string DiagnosticsArg = "trace";
         private const string ModeEnvVar = "STACKOVERFLOW_MINIGAME_MODE";
         private static bool diagnosticsHooked;
@@ -24,7 +23,7 @@ namespace stackoverflow_minigame
                 return;
             }
             bool enableDiagnostics = parsedArgs.Remove(DiagnosticsArg);
-            bool leaderboardRequested = ShouldLaunchLeaderboard(parsedArgs);
+            bool leaderboardRequested = ShouldLaunchLeaderboard();
             if (leaderboardRequested)
             {
                 if (enableDiagnostics)
@@ -35,7 +34,7 @@ namespace stackoverflow_minigame
                 viewer.Run();
                 return;
             }
-            Console.WriteLine("Tip: Launch with 'dotnet run', tap 'L' for the built-in leaderboard, or visit https://stackoverflow-minigame.fly.dev/ for the live feed.\n");
+            Console.WriteLine("Tip: Press 'L' anytime for the built-in leaderboard, or visit https://stackoverflow-minigame.fly.dev/ for the live feed.\n");
             Game game = new Game();
             if (enableDiagnostics)
             {
@@ -55,16 +54,11 @@ namespace stackoverflow_minigame
             }
         }
 
-        private static bool ShouldLaunchLeaderboard(HashSet<string> parsedArgs)
+        private static bool ShouldLaunchLeaderboard()
         {
-            if (parsedArgs.Remove(LeaderboardArg))
-            {
-                return true;
-            }
-
             string? requestedMode = Environment.GetEnvironmentVariable(ModeEnvVar);
             return !string.IsNullOrWhiteSpace(requestedMode) &&
-                   requestedMode.Trim().Equals(LeaderboardArg, StringComparison.OrdinalIgnoreCase);
+                   requestedMode.Trim().Equals("leaderboard", StringComparison.OrdinalIgnoreCase);
         }
 
         // Central place to wire verbose diagnostics so --trace lights up every relevant event without scattering hooks.
@@ -127,8 +121,7 @@ namespace stackoverflow_minigame
                     Console.WriteLine($"Unsupported option syntax: '{raw}'. Use space-delimited flags (e.g., --trace).");
                     continue;
                 }
-                if (trimmed.Equals(LeaderboardArg, StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals(DiagnosticsArg, StringComparison.OrdinalIgnoreCase))
+                if (trimmed.Equals(DiagnosticsArg, StringComparison.OrdinalIgnoreCase))
                 {
                     normalized.Add(trimmed);
                 }
@@ -145,10 +138,10 @@ namespace stackoverflow_minigame
             try
             {
                 Console.WriteLine("Usage:");
-                Console.WriteLine("  dotnet run                                   # play (tap 'L' for the overlay)");
+                Console.WriteLine("  dotnet run                                   # Start game (press 'L' anytime for leaderboard)");
+                Console.WriteLine("  dotnet run -- trace                          # Enable verbose diagnostics");
                 Console.WriteLine("  STACKOVERFLOW_MINIGAME_MODE=leaderboard dotnet run");
-                Console.WriteLine("                                               # standalone leaderboard (same as https://stackoverflow-minigame.fly.dev/)");
-                Console.WriteLine("  dotnet run -- trace                          # verbose diagnostics");
+                Console.WriteLine("                                               # Standalone leaderboard viewer");
             }
             catch (IOException ex)
             {
