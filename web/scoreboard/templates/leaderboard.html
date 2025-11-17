@@ -848,13 +848,17 @@
 
         // Create document fragment for efficient DOM updates
         const fragment = document.createDocumentFragment();
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = data.map((entry, index) => rowTemplate(entry, index + 1)).join('');
 
-        // Move nodes from temp div to fragment
-        while (tempDiv.firstChild) {
-          fragment.appendChild(tempDiv.firstChild);
-        }
+        // Create rows directly to avoid innerHTML table parsing issues
+        data.forEach((entry, index) => {
+          const tempTable = document.createElement('table');
+          const tempTbody = document.createElement('tbody');
+          tempTbody.innerHTML = rowTemplate(entry, index + 1);
+          // Extract the tr element from the tbody
+          if (tempTbody.firstChild) {
+            fragment.appendChild(tempTbody.firstChild);
+          }
+        });
 
         tbody.appendChild(fragment);
 
